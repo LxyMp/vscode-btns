@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- 圆角方形背景 -->
+  <rect x="3" y="3" width="26" height="26" rx="5" ry="5" fill="#007ACC" stroke="#007ACC" stroke-width="1"/>
+  <!-- 闪电图标，表示快捷动作 -->
+  <path d="M18 5L10 17h5l-1 9 8-11h-5l1-10z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round"/>
+</svg>

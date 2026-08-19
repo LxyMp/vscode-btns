@@ -1,0 +1,204 @@
+{
+  "name": "custom-actions-panel",
+  "displayName": "Custom Actions Panel",
+  "version": "0.0.1",
+  "description": "配置驱动的快捷动作面板，支持执行 VS Code 命令、终端命令和打开 URL",
+  "categories": [
+    "Other"
+  ],
+  "license": "MIT",
+  "publisher": "bigxin",
+  "main": "./out/extension.js",
+  "scripts": {
+    "vscode:prepublish": "yarn compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package",
+    "build": "yarn compile && mkdir -p dist && vsce package --allow-missing-repository -o dist/custom-actions-panel-$(node -e \"console.log(require('./package.json').version)\").vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "customActions",
+          "title": "Custom Actions",
+          "icon": "resources/activity-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "customActions": [
+        {
+          "id": "customActionsView",
+          "name": "快捷动作",
+          "icon": "$(zap)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "customActions.searchCommands",
+        "title": "Custom Actions: 搜索 VS Code 命令",
+        "icon": "$(search)"
+      },
+      {
+        "command": "customActions.runAction",
+        "title": "Custom Actions: 执行动作"
+      },
+      {
+        "command": "customActions.refresh",
+        "title": "Custom Actions: 刷新",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "customActions.openSettings",
+        "title": "Custom Actions: 打开配置",
+        "icon": "$(gear)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "customActions.refresh",
+          "when": "view == customActionsView",
+          "group": "navigation"
+        },
+        {
+          "command": "customActions.openSettings",
+          "when": "view == customActionsView",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Custom Actions",
+      "properties": {
+        "customActions.items": {
+          "type": "array",
+          "default": [],
+          "description": "自定义快捷动作列表",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "label",
+              "action"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "动作唯一ID"
+              },
+              "label": {
+                "type": "string",
+                "description": "动作标题"
+              },
+              "description": {
+                "type": "string",
+                "description": "动作描述"
+              },
+              "tooltip": {
+                "type": "string",
+                "description": "鼠标悬浮提示"
+              },
+              "icon": {
+                "type": "string",
+                "description": "VS Code Codicon 名称，例如 rocket、globe、terminal"
+              },
+              "action": {
+                "type": "object",
+                "required": [
+                  "type"
+                ],
+                "description": "动作定义",
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "command"
+                    ],
+                    "properties": {
+                      "type": {
+                        "const": "command"
+                      },
+                      "command": {
+                        "type": "string",
+                        "description": "VS Code 命令"
+                      },
+                      "args": {
+                        "type": "array",
+                        "description": "命令参数"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "command"
+                    ],
+                    "properties": {
+                      "type": {
+                        "const": "terminal",
+                        "description": "动作类型"
+                      },
+                      "command": {
+                        "type": "string",
+                        "description": "终端命令"
+                      },
+                      "cwd": {
+                        "type": "string",
+                        "default": "${workspaceFolder}",
+                        "description": "工作目录，默认为当前工作区根目录"
+                      },
+                      "terminalName": {
+                        "type": "string",
+                        "description": "终端名称"
+                      },
+                      "reuse": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "是否复用同名终端"
+                      },
+                      "reveal": {
+                        "type": "boolean",
+                        "default": true,
+                        "description": "是否显示终端"
+                      }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "type",
+                      "url"
+                    ],
+                    "properties": {
+                      "type": {
+                        "const": "url"
+                      },
+                      "url": {
+                        "type": "string",
+                        "description": "要打开的 URL"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  }
+}
