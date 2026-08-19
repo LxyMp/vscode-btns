@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ActionTreeProvider } from './tree/ActionTreeProvider';
 import { runAction, cleanupTerminals } from './actions';
-import { validateAllItems, getConfiguredItems } from './config';
+import { validateAllItems, getConfiguredItems, getRawConfiguredItems } from './config';
 import { CustomActionItem } from './types';
 
 /**
@@ -12,6 +12,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // 创建 TreeView 数据提供器
   const treeProvider = new ActionTreeProvider();
+  context.subscriptions.push(treeProvider);
 
   // 注册 TreeView
   const treeView = vscode.window.createTreeView('customActionsView', {
@@ -43,7 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       // 执行前校验
-      const errors = validateAllItems([targetItem]);
+      const errors = validateAllItems(items).filter((error) => error.itemId === targetItem.id);
       if (errors.length > 0) {
         const errorMsg = errors.map((e) => `[${e.field}] ${e.message}`).join('; ');
         vscode.window.showErrorMessage(`动作配置错误: ${errorMsg}`);
@@ -74,7 +75,12 @@ export function activate(context: vscode.ExtensionContext) {
       quickPick.onDidChangeSelection(async (selection) => {
         if (selection[0]) {
           quickPick.hide();
-          await vscode.commands.executeCommand(selection[0].label);
+          try {
+            await vscode.commands.executeCommand(selection[0].label);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(`执行命令 "${selection[0].label}" 失败: ${message}`);
+          }
         }
       });
 
@@ -116,7 +122,7 @@ export function activate(context: vscode.ExtensionContext) {
   } else {
     console.log(`[Custom Actions] 已加载 ${items.length} 个快捷动作`);
     // 校验并输出警告
-    const errors = validateAllItems(items);
+    const errors = validateAllItems(getRawConfiguredItems());
     if (errors.length > 0) {
       console.warn('[Custom Actions] 配置校验发现问题:');
       for (const error of errors) {

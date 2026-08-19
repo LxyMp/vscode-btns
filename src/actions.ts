@@ -17,31 +17,32 @@ const terminalCloseListeners: vscode.Disposable[] = [];
  */
 function getOrCreateTerminal(action: TerminalAction): vscode.Terminal {
   const name = action.terminalName || 'Custom Actions Terminal';
+  const cwd = action.cwd || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+  const cacheKey = `${name}\0${cwd}`;
 
   if (action.reuse !== false) {
-    const existing = terminalMap.get(name);
+    const existing = terminalMap.get(cacheKey);
     if (existing && existing.exitStatus === undefined) {
       // 终端仍然存活，复用
       return existing;
     }
     // 终端已关闭，从缓存中移除
     if (existing) {
-      terminalMap.delete(name);
+      terminalMap.delete(cacheKey);
       existing.dispose();
     }
   }
 
   // 默认 cwd 为当前工作区目录
-  const cwd = action.cwd || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || undefined;
   const terminal = vscode.window.createTerminal({
     name,
-    cwd,
+    cwd: cwd || undefined,
   });
 
   // 监听终端关闭事件，清理缓存
   const disposable = vscode.window.onDidCloseTerminal((closedTerminal) => {
     if (closedTerminal === terminal) {
-      terminalMap.delete(name);
+      terminalMap.delete(cacheKey);
       disposable.dispose();
       // 从全局监听列表中移除
       const idx = terminalCloseListeners.indexOf(disposable);
@@ -55,7 +56,7 @@ function getOrCreateTerminal(action: TerminalAction): vscode.Terminal {
   terminalCloseListeners.push(disposable);
 
   if (action.reuse !== false) {
-    terminalMap.set(name, terminal);
+    terminalMap.set(cacheKey, terminal);
   }
 
   return terminal;
@@ -119,7 +120,9 @@ export async function runAction(item: CustomActionItem): Promise<void> {
         break;
 
       default:
-        vscode.window.showErrorMessage(`未知的动作类型: "${(resolvedAction as any).type}"`);
+        vscode.window.showErrorMessage(
+          `未知的动作类型: "${String((resolvedAction as unknown as { type?: unknown }).type)}"`,
+        );
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

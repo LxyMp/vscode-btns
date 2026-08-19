@@ -9,18 +9,25 @@ export class ActionTreeItem extends vscode.TreeItem {
     public readonly actionItem: CustomActionItem,
     public readonly errors?: ValidationError[],
   ) {
-    super(actionItem.label, vscode.TreeItemCollapsibleState.None);
+    const fallbackLabel = actionItem.id || '无效动作';
+    super(
+      typeof actionItem.label === 'string' && actionItem.label.trim() ? actionItem.label : fallbackLabel,
+      vscode.TreeItemCollapsibleState.None,
+    );
 
-    this.description = actionItem.description;
-    this.tooltip = actionItem.tooltip || actionItem.description || actionItem.label;
+    this.description = typeof actionItem.description === 'string' ? actionItem.description : undefined;
+    this.tooltip =
+      (typeof actionItem.tooltip === 'string' && actionItem.tooltip) ||
+      (typeof actionItem.description === 'string' && actionItem.description) ||
+      fallbackLabel;
     this.contextValue = 'actionItem';
 
     // 设置图标
-    if (actionItem.icon) {
+    if (typeof actionItem.icon === 'string' && actionItem.icon) {
       this.iconPath = new vscode.ThemeIcon(actionItem.icon);
     } else {
       // 根据动作类型设置默认图标
-      switch (actionItem.action.type) {
+      switch (actionItem.action?.type) {
         case 'command':
           this.iconPath = new vscode.ThemeIcon('symbol-method');
           break;

@@ -1,25 +1,31 @@
 import * as vscode from 'vscode';
 import { ActionTreeItem } from './ActionTreeItem';
-import { getConfiguredItems, validateItem } from '../config';
+import { getConfiguredItems, validateAllItems } from '../config';
 import { CustomActionItem } from '../types';
 
 /**
  * TreeView 数据提供器
  */
-export class ActionTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+export class ActionTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem>, vscode.Disposable {
   private _onDidChangeTreeData: vscode.EventEmitter<vscode.TreeItem | undefined | null | void> =
     new vscode.EventEmitter<vscode.TreeItem | undefined | null | void>();
 
   readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined | null | void> =
     this._onDidChangeTreeData.event;
+  private readonly configurationListener: vscode.Disposable;
 
   constructor() {
     // 监听配置变更，自动刷新 TreeView
-    vscode.workspace.onDidChangeConfiguration((e) => {
+    this.configurationListener = vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('customActions.items')) {
         this.refresh();
       }
     });
+  }
+
+  dispose(): void {
+    this.configurationListener.dispose();
+    this._onDidChangeTreeData.dispose();
   }
 
   /**
@@ -41,6 +47,10 @@ export class ActionTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
    */
   getChildren(element?: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem[]> {
     if (element) {
+      if (element instanceof ActionGroupTreeItem) {
+        const errors = validateAllItems(getConfiguredItems());
+        return element.items.map((item) => this.toActionTreeItem(item, errors));
+      }
       return [];
     }
 
@@ -67,13 +77,32 @@ export class ActionTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
       return result;
     }
 
-    // 构建 TreeItem 列表，包含校验信息
+    const groups = new Map<string, CustomActionItem[]>();
+    const validationErrors = validateAllItems(items);
     for (const item of items) {
-      const errors = validateItem(item);
-      result.push(new ActionTreeItem(item, errors.length > 0 ? errors : undefined));
+      const group = typeof item.group === 'string' ? item.group.trim() : '';
+      const groupItems = groups.get(group) || [];
+      groupItems.push(item);
+      groups.set(group, groupItems);
+    }
+
+    for (const [group, groupItems] of groups) {
+      if (group) {
+        result.push(new ActionGroupTreeItem(group, groupItems));
+      } else {
+        result.push(...groupItems.map((item) => this.toActionTreeItem(item, validationErrors)));
+      }
     }
 
     return result;
+  }
+
+  private toActionTreeItem(
+    item: CustomActionItem,
+    allErrors = validateAllItems([item]),
+  ): ActionTreeItem {
+    const errors = allErrors.filter((error) => error.itemId === item.id || error.itemId === 'unknown');
+    return new ActionTreeItem(item, errors.length > 0 ? errors : undefined);
   }
 
   /**
@@ -101,5 +130,13 @@ export class ActionTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
     placeholderItem.contextValue = 'placeholder';
 
     return [placeholderItem];
+  }
+}
+
+class ActionGroupTreeItem extends vscode.TreeItem {
+  constructor(label: string, public readonly items: CustomActionItem[]) {
+    super(label, vscode.TreeItemCollapsibleState.Expanded);
+    this.iconPath = new vscode.ThemeIcon('folder');
+    this.contextValue = 'actionGroup';
   }
 }

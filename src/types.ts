@@ -47,6 +47,7 @@ export type CustomAction = CommandAction | TerminalAction | UrlAction;
 export interface CustomActionItem {
   id: string;
   label: string;
+  group?: string;
   description?: string;
   tooltip?: string;
   icon?: string;

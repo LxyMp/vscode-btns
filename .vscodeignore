@@ -7,3 +7,6 @@ src/**
 **/*.map
 .gitignore
 tsconfig.json
+tsconfig*.json
+tests/**
+.eslintrc.json

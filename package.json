@@ -3,23 +3,51 @@
   "displayName": "Custom Actions Panel",
   "version": "0.0.1",
   "description": "配置驱动的快捷动作面板，支持执行 VS Code 命令、终端命令和打开 URL",
+  "keywords": [
+    "actions",
+    "commands",
+    "terminal",
+    "productivity"
+  ],
   "categories": [
     "Other"
   ],
   "license": "MIT",
   "publisher": "bigxin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bigxin/vscode-btns.git"
+  },
+  "homepage": "https://github.com/bigxin/vscode-btns#readme",
+  "bugs": {
+    "url": "https://github.com/bigxin/vscode-btns/issues"
+  },
   "main": "./out/extension.js",
+  "activationEvents": [
+    "onView:customActionsView",
+    "onCommand:customActions.searchCommands",
+    "onCommand:customActions.runAction",
+    "onCommand:customActions.refresh",
+    "onCommand:customActions.openSettings"
+  ],
   "scripts": {
     "vscode:prepublish": "yarn compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "lint": "eslint src --ext ts",
-    "package": "vsce package",
+    "lint": "eslint src tests --ext ts",
+    "test": "tsx --test tests/*.test.ts",
+    "validate": "yarn lint && yarn test && yarn compile",
+    "package": "vsce package --allow-missing-repository",
     "build": "yarn compile && mkdir -p dist && vsce package --allow-missing-repository -o dist/custom-actions-panel-$(node -e \"console.log(require('./package.json').version)\").vsix"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.80.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vscode/vsce": "^3.2.0",
+    "eslint": "^8.57.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.0.0"
   },
   "contributes": {
@@ -98,6 +126,10 @@
               "label": {
                 "type": "string",
                 "description": "动作标题"
+              },
+              "group": {
+                "type": "string",
+                "description": "可选分组名称，相同名称的动作会显示在同一折叠节点中"
               },
               "description": {
                 "type": "string",
