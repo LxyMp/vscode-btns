@@ -63,29 +63,7 @@ export function activate(context: vscode.ExtensionContext) {
   const searchDisposable = vscode.commands.registerCommand(
     'customActions.searchCommands',
     async () => {
-      const allCommands = await vscode.commands.getCommands(true);
-      const quickPick = vscode.window.createQuickPick();
-      quickPick.placeholder = '搜索 VS Code 命令...';
-      quickPick.matchOnDescription = true;
-      quickPick.matchOnDetail = true;
-
-      // 构建选项列表
-      quickPick.items = allCommands.map((cmd) => ({ label: cmd }));
-
-      quickPick.onDidChangeSelection(async (selection) => {
-        if (selection[0]) {
-          quickPick.hide();
-          try {
-            await vscode.commands.executeCommand(selection[0].label);
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            vscode.window.showErrorMessage(`执行命令 "${selection[0].label}" 失败: ${message}`);
-          }
-        }
-      });
-
-      quickPick.onDidHide(() => quickPick.dispose());
-      quickPick.show();
+      await vscode.commands.executeCommand('workbench.action.showCommands');
     },
   );
 
