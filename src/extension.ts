@@ -3,6 +3,7 @@ import { ActionTreeProvider } from './tree/ActionTreeProvider';
 import { runAction, cleanupTerminals } from './actions';
 import { validateAllItems, getConfiguredItems, getRawConfiguredItems } from './config';
 import { CustomActionItem } from './types';
+import { buildCommandQuickPickItems, collectCommandTitles } from './commandMetadata';
 
 /**
  * 插件激活入口
@@ -63,7 +64,24 @@ export function activate(context: vscode.ExtensionContext) {
   const searchDisposable = vscode.commands.registerCommand(
     'customActions.searchCommands',
     async () => {
-      await vscode.commands.executeCommand('workbench.action.showCommands');
+      const [commandIds] = await Promise.all([vscode.commands.getCommands(true)]);
+      const titles = collectCommandTitles(vscode.extensions.all);
+      const selected = await vscode.window.showQuickPick(
+        buildCommandQuickPickItems(commandIds, titles),
+        {
+          matchOnDetail: true,
+          placeHolder: '搜索 VS Code 命令 ID 或本地化标题...',
+        },
+      );
+
+      if (selected) {
+        try {
+          await vscode.commands.executeCommand(selected.commandId);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(`执行命令 "${selected.commandId}" 失败: ${message}`);
+        }
+      }
     },
   );
 
