@@ -126,7 +126,7 @@ export class ActionTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
       command: 'customActions.openSettings',
       title: '打开配置',
     };
-    placeholderItem.tooltip = '点击打开 settings.json 配置快捷动作';
+    placeholderItem.tooltip = '点击打开可视化配置面板';
     placeholderItem.contextValue = 'placeholder';
 
     return [placeholderItem];

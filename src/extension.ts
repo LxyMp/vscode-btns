@@ -4,6 +4,7 @@ import { runAction, cleanupTerminals } from './actions';
 import { validateAllItems, getConfiguredItems, getRawConfiguredItems } from './config';
 import { CustomActionItem } from './types';
 import { buildCommandQuickPickItems, collectCommandTitles } from './commandMetadata';
+import { ConfigPanel } from './configPanel';
 
 /**
  * 插件激活入口
@@ -102,7 +103,7 @@ export function activate(context: vscode.ExtensionContext) {
   const openSettingsDisposable = vscode.commands.registerCommand(
     'customActions.openSettings',
     () => {
-      vscode.commands.executeCommand('workbench.action.openSettings', 'customActions.items');
+      ConfigPanel.show(context);
     },
   );
 
@@ -113,7 +114,7 @@ export function activate(context: vscode.ExtensionContext) {
   const items = getConfiguredItems();
   if (items.length === 0) {
     console.log(
-      '[Custom Actions] 当前未配置快捷动作，请在 settings.json 中添加 customActions.items',
+      '[Custom Actions] 当前未配置快捷动作，请打开可视化配置面板添加动作',
     );
   } else {
     console.log(`[Custom Actions] 已加载 ${items.length} 个快捷动作`);

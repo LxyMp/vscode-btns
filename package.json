@@ -87,7 +87,7 @@
       },
       {
         "command": "customActions.openSettings",
-        "title": "Custom Actions: 打开配置",
+        "title": "Custom Actions: 可视化配置",
         "icon": "$(gear)"
       }
     ],
