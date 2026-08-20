@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   getConfiguredItemsForEditor,
   updateConfiguredItemsForEditor,
@@ -37,7 +39,7 @@ export class ConfigPanel implements vscode.Disposable {
     context: vscode.ExtensionContext,
   ) {
     this.panel.iconPath = vscode.Uri.joinPath(context.extensionUri, 'resources', 'activity-icon.svg');
-    this.panel.webview.html = getWebviewHtml(this.panel.webview);
+    this.panel.webview.html = getWebviewHtml(this.panel.webview, context.extensionUri);
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
       this.panel.webview.onDidReceiveMessage((message: WebviewMessage) => this.handleMessage(message)),
@@ -70,6 +72,7 @@ export class ConfigPanel implements vscode.Disposable {
     await this.panel.webview.postMessage({
       type: 'state',
       commandIds: await vscode.commands.getCommands(true),
+      icons: readCodicons(),
       items: Array.isArray(rawItems) ? rawItems : [],
       rootError: Array.isArray(rawItems) ? undefined : 'customActions.items 不是数组',
     });
@@ -107,16 +110,33 @@ function getNonce(): string {
   return nonce;
 }
 
-function getWebviewHtml(webview: vscode.Webview): string {
+function readCodicons(): Array<{ name: string; character: string }> {
+  const csvPath = path.join(__dirname, '..', 'resources', 'codicon.csv');
+  try {
+    const lines = fs.readFileSync(csvPath, 'utf8').split(/\r?\n/).slice(1);
+    return lines.flatMap((line) => {
+      const [name, character] = line.split(',');
+      return name && character ? [{ name, character }] : [];
+    });
+  } catch (error) {
+    console.warn('[Custom Actions] 无法读取 Codicon 列表:', error);
+    return [];
+  }
+}
+
+function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): string {
   const nonce = getNonce();
+  const codiconFont = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'resources', 'codicon.ttf'));
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; font-src ${webview.cspSource}; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}';">
   <title>快捷动作配置</title>
   <style nonce="${nonce}">
+    @font-face { font-family: codicon; src: url('${codiconFont}') format('truetype'); font-display: block; }
+    .codicon { font: normal normal normal 16px/1 codicon; display: inline-flex; align-items: center; justify-content: center; }
     :root { color-scheme: light dark; }
     * { box-sizing: border-box; }
     body { margin: 0; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }
@@ -152,6 +172,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
     .menu button:hover, .icon-menu button:hover { background: var(--vscode-list-hoverBackground); }
     .icon-preview { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 3px; background: var(--vscode-button-secondaryBackground); }
     .icon-check { display: inline-flex; align-items: center; justify-content: center; width: 18px; flex: 0 0 18px; color: var(--vscode-testing-iconPassed); font-weight: 700; }
+    .icon-search { position: sticky; top: 0; z-index: 1; margin-bottom: 4px; }
     .menu-select .menu.hidden, .icon-picker .icon-menu.hidden, .combo-menu.hidden { display: none; }
     .checks { display: flex; align-items: center; gap: 18px; min-height: 30px; }
     .checks label { display: inline-flex; align-items: center; gap: 6px; color: var(--vscode-foreground); }
@@ -172,7 +193,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
   </main>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    const state = { items: [], commandIds: [], dirty: false, errors: [] };
+    const state = { items: [], commandIds: [], icons: [], dirty: false, errors: [] };
     const actionsElement = document.getElementById('actions');
     const statusElement = document.getElementById('status');
     const saveButton = document.getElementById('save');
@@ -189,6 +210,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
       const message = event.data;
       if (message.type === 'state') {
         state.commandIds = Array.isArray(message.commandIds) ? message.commandIds : [];
+        state.icons = Array.isArray(message.icons) ? message.icons : [];
         state.items = normalizeItems(message.items);
         state.dirty = false;
         state.errors = [];
@@ -334,7 +356,8 @@ function getWebviewHtml(webview: vscode.Webview): string {
     function groupOptions(current) { const values = [...new Set(state.items.map((item) => item.group).filter(Boolean))]; if (current && !values.includes(current)) values.unshift(current); return [{ value: '', label: '无分组' }, ...values.map((value) => ({ value, label: value }))]; }
     function comboField(label, name, value, options) { const available = options.filter(Boolean); if (!available.length) return field(label, name, value, false); return '<div class="field"><label>' + label + '</label><div class="combo"><input data-field="' + name + '" value="' + escapeAttr(value) + '"><div class="combo-menu hidden">' + available.map((option) => '<button type="button" data-value="' + escapeAttr(option) + '">' + escapeHtml(option) + '</button>').join('') + '</div></div></div>'; }
     function menuSelect(label, name, value, options) { return '<div class="field"><label>' + label + '</label><div class="menu-select" data-select="' + name + '"><button type="button">' + escapeHtml(options.find((option) => option.value === value)?.label || value) + '</button><div class="menu hidden">' + options.map((option) => '<button type="button" data-value="' + escapeAttr(option.value) + '">' + escapeHtml(option.label) + '</button>').join('') + '</div></div></div>'; }
-    function iconPicker(value) { const icons = [{ name: '', glyph: '·' }, { name: 'rocket', glyph: '🚀' }, { name: 'globe', glyph: '🌐' }, { name: 'terminal', glyph: '▣' }, { name: 'zap', glyph: 'ϟ' }, { name: 'gear', glyph: '⚙' }, { name: 'play', glyph: '▶' }, { name: 'debug', glyph: '◇' }, { name: 'package', glyph: '□' }, { name: 'book', glyph: '▤' }]; const current = icons.find((icon) => icon.name === value) || { name: value, glyph: '◈' }; return '<div class="field"><label>图标</label><div class="icon-picker" data-select="icon"><button type="button"><span><span class="icon-preview">' + current.glyph + '</span> ' + escapeHtml(current.name || '无图标') + '</span></button><div class="icon-menu hidden">' + icons.map((icon) => '<button type="button" data-value="' + escapeAttr(icon.name) + '"><span class="icon-check">' + (icon.name === value ? '✓' : '') + '</span><span class="icon-preview">' + icon.glyph + '</span><span>' + escapeHtml(icon.name || '无图标') + '</span></button>').join('') + '</div></div></div>'; }
+    function iconPicker(value) { const current = state.icons.find((icon) => icon.name === value) || { name: value, character: value ? '◇' : '·' }; return '<div class="field"><label>图标</label><div class="icon-picker" data-select="icon"><button type="button"><span><span class="icon-preview codicon">' + current.character + '</span> ' + escapeHtml(current.name || '无图标') + '</span></button><div class="icon-menu hidden"></div></div></div>'; }
+    function populateIconMenu(menu, currentValue, index) { const icons = [{ name: '', character: '·' }, ...state.icons]; menu.innerHTML = '<input class="icon-search" placeholder="搜索图标..."><div class="icon-options">' + icons.map((icon) => '<button type="button" data-value="' + escapeAttr(icon.name) + '"><span class="icon-check">' + (icon.name === currentValue ? '✓' : '') + '</span><span class="icon-preview codicon">' + icon.character + '</span><span>' + escapeHtml(icon.name || '无图标') + '</span></button>').join('') + '</div>'; const search = menu.querySelector('.icon-search'); search.addEventListener('input', () => menu.querySelectorAll('[data-value]').forEach((option) => option.classList.toggle('hidden', !option.dataset.value.includes(search.value.toLowerCase())))); menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => { state.items[index].icon = option.dataset.value; state.errors = []; markDirty(); render(); })); }
     function closeMenus() { document.querySelectorAll('.menu, .icon-menu, .combo-menu').forEach((menu) => menu.classList.add('hidden')); }
 
     function bindItemEvents() {
@@ -348,7 +371,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
         element.querySelectorAll('[data-select]').forEach((select) => {
           const trigger = select.querySelector(':scope > button');
           const menu = select.querySelector(':scope > .menu, :scope > .icon-menu');
-          trigger.addEventListener('click', () => { const opening = menu.classList.contains('hidden'); closeMenus(); if (opening) menu.classList.remove('hidden'); });
+          trigger.addEventListener('click', () => { const opening = menu.classList.contains('hidden'); closeMenus(); if (opening) { if (select.dataset.select === 'icon' && !menu.childElementCount) populateIconMenu(menu, state.items[index].icon, index); menu.classList.remove('hidden'); } });
           menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => {
             const value = option.dataset.value;
             const fieldName = select.dataset.select;
