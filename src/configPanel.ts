@@ -158,6 +158,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     .empty { padding: 48px 16px; text-align: center; border: 1px dashed var(--vscode-panel-border); color: var(--vscode-descriptionForeground); }
     .action { margin-bottom: 12px; border: 1px solid var(--vscode-panel-border); border-radius: 6px; background: var(--vscode-sideBar-background); }
     .action.invalid { border-color: var(--vscode-inputValidation-errorBorder); }
+    .action.dirty-item { border-color: var(--vscode-testing-iconFailed, #f14c4c); }
     .action-header { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 10px; border-bottom: 1px solid var(--vscode-panel-border); }
     .action-index { min-width: 26px; color: var(--vscode-descriptionForeground); font-variant-numeric: tabular-nums; }
     .action-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
@@ -190,8 +191,8 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
 <body>
   <header class="toolbar">
     <div class="toolbar-title">快捷动作配置</div>
-    <button id="add" class="command secondary" type="button">新增动作</button>
-    <button id="cancel" class="command secondary" type="button">取消</button>
+    <button id="add" class="command" type="button">新增</button>
+    <button id="cancel" class="command" type="button">取消</button>
     <button id="save" class="command" type="button">保存</button>
   </header>
   <main>
@@ -236,6 +237,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
           if (invalid) window.scrollBy({ top: -64, behavior: 'smooth' });
         });
       } else if (message.type === 'saved') {
+        state.items.forEach((item) => { item.isNew = false; item.isDirty = false; });
         state.dirty = false;
         state.errors = [];
         renderToolbar();
@@ -252,6 +254,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         return {
           id: stringValue(item && item.id), label: stringValue(item && item.label),
           group: stringValue(item && item.group), icon: stringValue(item && item.icon),
+          isNew: false, isDirty: false,
           action: {
             type: ['command', 'terminal', 'url'].includes(action.type) ? action.type : 'command',
             command: stringValue(action.command), url: stringValue(action.url),
@@ -269,7 +272,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
       let suffix = state.items.length + 1;
       let id = '新动作';
       while (state.items.some((item) => item.id === id)) { id = '新动作 ' + suffix++; }
-      state.items.push({ id, label: id, group: '', icon: '', action: { type: 'command', command: '', url: '', argsText: '[]', cwd: '\${workspaceFolder}', terminalName: '', reuse: true, reveal: true } });
+      state.items.push({ id, label: id, group: '', icon: '', isNew: true, isDirty: true, action: { type: 'command', command: '', url: '', argsText: '[]', cwd: '\${workspaceFolder}', terminalName: '', reuse: true, reveal: true } });
       markDirty();
       render();
       document.querySelector('[data-index="' + (state.items.length - 1) + '"] input[data-field="label"]')?.focus();
@@ -345,7 +348,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     function renderItem(item, index) {
       const itemErrors = state.errors.filter((entry) => entry.itemId === item.id || (entry.itemId === 'unknown' && !item.id));
       const errorHtml = itemErrors.length ? '<div class="errors">' + itemErrors.map((entry) => escapeHtml('[' + entry.field + '] ' + entry.message)).join('<br>') + '</div>' : '';
-      return '<section class="action ' + (itemErrors.length ? 'invalid' : '') + '" data-index="' + index + '">' +
+      return '<section class="action ' + (itemErrors.length ? 'invalid ' : '') + ((item.isNew || item.isDirty) ? 'dirty-item' : '') + '" data-index="' + index + '">' +
         '<div class="action-header"><span class="action-index">' + (index + 1) + '</span><span class="action-name">' + escapeHtml(item.label || item.id || '未命名动作') + '</span>' +
         iconButton('↑', '上移', 'up', index === 0) + iconButton('↓', '下移', 'down', index === state.items.length - 1) + iconButton('×', '删除', 'delete', false) + '</div>' +
         '<div class="action-body">' + field('名称', 'label', item.label) + field('ID', 'id', item.id) + menuSelect('行为', 'action.type', item.action.type, [{ value: 'command', label: 'VS Code 命令' }, { value: 'terminal', label: '终端命令' }, { value: 'url', label: '打开 URL' }]) + commandField(item) + comboField('分组', 'group', item.group, groupOptions(item.group).map((option) => option.value)) + iconPicker(item.icon) +
@@ -375,7 +378,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     function comboField(label, name, value, options) { const available = options.filter(Boolean); if (!available.length) return field(label, name, value, false); return '<div class="field"><label>' + label + '</label><div class="combo"><input data-field="' + name + '" value="' + escapeAttr(value) + '"><div class="combo-menu hidden">' + available.map((option) => '<button type="button" data-value="' + escapeAttr(option) + '">' + escapeHtml(option) + '</button>').join('') + '</div></div></div>'; }
     function menuSelect(label, name, value, options) { return '<div class="field"><label>' + label + '</label><div class="menu-select" data-select="' + name + '"><button type="button">' + escapeHtml(options.find((option) => option.value === value)?.label || value) + '</button><div class="menu hidden">' + options.map((option) => '<button type="button" data-value="' + escapeAttr(option.value) + '">' + escapeHtml(option.label) + '</button>').join('') + '</div></div></div>'; }
     function iconPicker(value) { const current = state.icons.find((icon) => icon.name === value) || { name: value, character: value ? '◇' : '·' }; return '<div class="field"><label>图标</label><div class="icon-picker" data-select="icon"><button type="button"><span><span class="icon-preview codicon">' + current.character + '</span> ' + escapeHtml(current.name || '无图标') + '</span></button><div class="icon-menu hidden"></div></div></div>'; }
-    function populateIconMenu(menu, currentValue, index) { const icons = [{ name: '', character: '·' }, ...state.icons]; menu.innerHTML = '<input class="icon-search" placeholder="搜索图标..."><div class="icon-options">' + icons.map((icon) => '<button type="button" data-value="' + escapeAttr(icon.name) + '"><span class="icon-check">' + (icon.name === currentValue ? '✓' : '') + '</span><span class="icon-preview codicon">' + icon.character + '</span><span>' + escapeHtml(icon.name || '无图标') + '</span></button>').join('') + '</div>'; const search = menu.querySelector('.icon-search'); search.addEventListener('input', () => menu.querySelectorAll('[data-value]').forEach((option) => option.classList.toggle('hidden', !option.dataset.value.includes(search.value.toLowerCase())))); menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => { state.items[index].icon = option.dataset.value; state.errors = []; markDirty(); render(); })); }
+    function populateIconMenu(menu, currentValue, index) { const icons = [{ name: '', character: '·' }, ...state.icons]; menu.innerHTML = '<input class="icon-search" placeholder="搜索图标..."><div class="icon-options">' + icons.map((icon) => '<button type="button" data-value="' + escapeAttr(icon.name) + '"><span class="icon-check">' + (icon.name === currentValue ? '✓' : '') + '</span><span class="icon-preview codicon">' + icon.character + '</span><span>' + escapeHtml(icon.name || '无图标') + '</span></button>').join('') + '</div>'; const search = menu.querySelector('.icon-search'); search.addEventListener('input', () => menu.querySelectorAll('[data-value]').forEach((option) => option.classList.toggle('hidden', !option.dataset.value.includes(search.value.toLowerCase())))); menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => { state.items[index].icon = option.dataset.value; markItemDirty(index); state.errors = []; render(); })); }
     function closeMenus() { document.querySelectorAll('.menu, .icon-menu, .combo-menu').forEach((menu) => menu.classList.add('hidden')); }
 
     function bindItemEvents() {
@@ -397,7 +400,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
             else if (fieldName === 'group') state.items[index].group = value;
             else state.items[index].action.type = value;
             state.errors = [];
-            markDirty();
+            markItemDirty(index);
             render();
           }));
         });
@@ -427,7 +430,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
       if (path.length === 1) state.items[index][path[0]] = value;
       else state.items[index][path[0]][path[1]] = value;
       state.errors = [];
-      markDirty();
+      markItemDirty(index);
       if (input.dataset.field === 'label' && (!state.items[index].id || state.items[index].id === previousLabel)) {
         state.items[index].id = value;
         input.closest('.action').querySelector('[data-field="id"]').value = state.items[index].id;
@@ -442,12 +445,17 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         state.items.splice(index, 1);
       } else if (action === 'up' && index > 0) {
         [state.items[index - 1], state.items[index]] = [state.items[index], state.items[index - 1]];
+        state.items[index - 1].isDirty = true;
+        state.items[index].isDirty = true;
       } else if (action === 'down' && index < state.items.length - 1) {
         [state.items[index + 1], state.items[index]] = [state.items[index], state.items[index + 1]];
+        state.items[index + 1].isDirty = true;
+        state.items[index].isDirty = true;
       }
       markDirty(); render();
     }
 
+    function markItemDirty(index) { state.items[index].isDirty = true; markDirty(); }
     function markDirty() { state.dirty = true; renderToolbar(); setStatus('有未保存的修改'); }
     function setStatus(message, isError) { statusElement.textContent = message; statusElement.classList.toggle('error', Boolean(isError)); saveButton.disabled = !state.dirty; cancelButton.disabled = !state.dirty; }
     function escapeHtml(value) { return String(value).replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character]); }
