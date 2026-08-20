@@ -61,16 +61,20 @@ export class ConfigPanel implements vscode.Disposable {
       case 'ready':
         await this.sendState();
         break;
+      case 'reload':
+        await this.sendState(true);
+        break;
       case 'save':
         await this.save(message.items);
         break;
     }
   }
 
-  private async sendState(): Promise<void> {
+  private async sendState(wasCancelled = false): Promise<void> {
     const rawItems = getConfiguredItemsForEditor();
     await this.panel.webview.postMessage({
       type: 'state',
+      wasCancelled,
       commandIds: await vscode.commands.getCommands(true),
       icons: readCodicons(),
       items: Array.isArray(rawItems) ? rawItems : [],
@@ -185,6 +189,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
   <header class="toolbar">
     <div class="toolbar-title">快捷动作配置</div>
     <button id="add" class="command secondary" type="button">新增动作</button>
+    <button id="cancel" class="command secondary" type="button">取消</button>
     <button id="save" class="command" type="button">保存</button>
   </header>
   <main>
@@ -197,8 +202,10 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     const actionsElement = document.getElementById('actions');
     const statusElement = document.getElementById('status');
     const saveButton = document.getElementById('save');
+    const cancelButton = document.getElementById('cancel');
     document.getElementById('add').addEventListener('click', addItem);
     saveButton.addEventListener('click', save);
+    cancelButton.addEventListener('click', cancel);
     document.addEventListener('pointerdown', (event) => {
       if (!event.target.closest('.menu-select, .icon-picker, .combo')) closeMenus();
     });
@@ -216,6 +223,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         state.errors = [];
         render();
         setStatus(message.rootError || '');
+        if (message.wasCancelled) setStatus('已取消未保存的修改');
       } else if (message.type === 'validationErrors') {
         state.errors = message.errors || [];
         render();
@@ -278,6 +286,13 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
       vscode.postMessage({ type: 'save', items: result.items });
     }
 
+    function cancel() {
+      if (!state.dirty) return;
+      if (!confirm('确定放弃当前未保存的修改吗？')) return;
+      cancelButton.disabled = true;
+      vscode.postMessage({ type: 'reload' });
+    }
+
     function serializeItems() {
       const errors = [];
       const ids = new Set();
@@ -322,6 +337,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     function renderToolbar() {
       saveButton.disabled = !state.dirty;
       saveButton.textContent = state.dirty ? '保存' : '已保存';
+      cancelButton.disabled = !state.dirty;
     }
 
     function renderItem(item, index) {
@@ -431,7 +447,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     }
 
     function markDirty() { state.dirty = true; renderToolbar(); setStatus('有未保存的修改'); }
-    function setStatus(message, isError) { statusElement.textContent = message; statusElement.classList.toggle('error', Boolean(isError)); saveButton.disabled = !state.dirty; }
+    function setStatus(message, isError) { statusElement.textContent = message; statusElement.classList.toggle('error', Boolean(isError)); saveButton.disabled = !state.dirty; cancelButton.disabled = !state.dirty; }
     function escapeHtml(value) { return String(value).replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character]); }
     function escapeAttr(value) { return escapeHtml(value).replace(/"/g, '&quot;'); }
 
