@@ -15,8 +15,7 @@ export class ActionTreeItem extends vscode.TreeItem {
       vscode.TreeItemCollapsibleState.None,
     );
 
-    this.description = typeof actionItem.description === 'string' ? actionItem.description : undefined;
-    this.tooltip = actionItem.description || fallbackLabel;
+    this.tooltip = fallbackLabel;
     this.contextValue = 'actionItem';
 
     // 设置图标

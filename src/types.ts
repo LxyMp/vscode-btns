@@ -48,7 +48,6 @@ export interface CustomActionItem {
   id: string;
   label: string;
   group?: string;
-  description?: string;
   icon?: string;
   action: CustomAction;
 }

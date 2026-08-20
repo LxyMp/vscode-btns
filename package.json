@@ -132,10 +132,6 @@
                 "type": "string",
                 "description": "可选分组名称，相同名称的动作会显示在同一折叠节点中"
               },
-              "description": {
-                "type": "string",
-                "description": "动作描述"
-              },
               "icon": {
                 "type": "string",
                 "description": "图标名称，例如 rocket、globe、terminal"

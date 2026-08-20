@@ -172,11 +172,13 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     .menu-select > button, .icon-picker > button { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
     .menu-select > button::after, .icon-picker > button::after, .combo::after { content: '⌄'; color: var(--vscode-descriptionForeground); position: absolute; right: 8px; top: 6px; pointer-events: none; }
     .menu, .icon-menu, .combo-menu { position: absolute; left: 0; right: 0; z-index: 20; max-height: 220px; overflow: auto; margin-top: 3px; padding: 4px; border: 1px solid var(--vscode-focusBorder); border-radius: 4px; background: var(--vscode-menu-background, var(--vscode-editor-background)); box-shadow: 0 6px 18px rgba(0,0,0,.28); }
+    .icon-menu { max-height: none; overflow: hidden; padding: 4px; }
+    .icon-options { max-height: 180px; overflow-y: auto; }
     .menu button, .icon-menu button, .combo-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 4px 7px; border: 0; background: transparent; color: var(--vscode-menu-foreground, var(--vscode-foreground)); text-align: left; }
     .menu button:hover, .icon-menu button:hover { background: var(--vscode-list-hoverBackground); }
     .icon-preview { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 3px; background: var(--vscode-button-secondaryBackground); }
     .icon-check { display: inline-flex; align-items: center; justify-content: center; width: 18px; flex: 0 0 18px; color: var(--vscode-testing-iconPassed); font-weight: 700; }
-    .icon-search { position: sticky; top: 0; z-index: 1; margin-bottom: 4px; }
+    .icon-search { display: block; position: static; width: 100%; margin: 0 0 4px; }
     .menu-select .menu.hidden, .icon-picker .icon-menu.hidden, .combo-menu.hidden { display: none; }
     .checks { display: flex; align-items: center; gap: 18px; min-height: 30px; }
     .checks label { display: inline-flex; align-items: center; gap: 6px; color: var(--vscode-foreground); }
@@ -249,7 +251,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         const action = item && typeof item.action === 'object' ? item.action : {};
         return {
           id: stringValue(item && item.id), label: stringValue(item && item.label),
-          group: stringValue(item && item.group), description: stringValue(item && item.description), icon: stringValue(item && item.icon),
+          group: stringValue(item && item.group), icon: stringValue(item && item.icon),
           action: {
             type: ['command', 'terminal', 'url'].includes(action.type) ? action.type : 'command',
             command: stringValue(action.command), url: stringValue(action.url),
@@ -267,7 +269,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
       let suffix = state.items.length + 1;
       let id = '新动作';
       while (state.items.some((item) => item.id === id)) { id = '新动作 ' + suffix++; }
-      state.items.push({ id, label: id, group: '', description: '', icon: '', action: { type: 'command', command: '', url: '', argsText: '[]', cwd: '\${workspaceFolder}', terminalName: '', reuse: true, reveal: true } });
+      state.items.push({ id, label: id, group: '', icon: '', action: { type: 'command', command: '', url: '', argsText: '[]', cwd: '\${workspaceFolder}', terminalName: '', reuse: true, reveal: true } });
       markDirty();
       render();
       document.querySelector('[data-index="' + (state.items.length - 1) + '"] input[data-field="label"]')?.focus();
@@ -302,7 +304,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         if (ids.has(item.id.trim())) errors.push(error(itemId, 'id', 'id 重复'));
         ids.add(item.id.trim());
         if (!item.label.trim()) errors.push(error(itemId, 'label', 'label 必须是非空字符串'));
-        const output = compact({ id: item.id.trim(), label: item.label.trim(), group: item.group.trim(), description: item.description.trim(), icon: item.icon.trim(), action: {} });
+        const output = compact({ id: item.id.trim(), label: item.label.trim(), group: item.group.trim(), icon: item.icon.trim(), action: {} });
         if (item.action.type === 'command') {
           if (!item.action.command.trim()) errors.push(error(itemId, 'action.command', 'command 必须是非空字符串'));
           let args = [];
@@ -346,7 +348,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
       return '<section class="action ' + (itemErrors.length ? 'invalid' : '') + '" data-index="' + index + '">' +
         '<div class="action-header"><span class="action-index">' + (index + 1) + '</span><span class="action-name">' + escapeHtml(item.label || item.id || '未命名动作') + '</span>' +
         iconButton('↑', '上移', 'up', index === 0) + iconButton('↓', '下移', 'down', index === state.items.length - 1) + iconButton('×', '删除', 'delete', false) + '</div>' +
-        '<div class="action-body">' + field('名称', 'label', item.label) + field('ID', 'id', item.id) + menuSelect('行为', 'action.type', item.action.type, [{ value: 'command', label: 'VS Code 命令' }, { value: 'terminal', label: '终端命令' }, { value: 'url', label: '打开 URL' }]) + commandField(item) + comboField('分组', 'group', item.group, groupOptions(item.group).map((option) => option.value)) + iconPicker(item.icon) + field('描述', 'description', item.description) +
+        '<div class="action-body">' + field('名称', 'label', item.label) + field('ID', 'id', item.id) + menuSelect('行为', 'action.type', item.action.type, [{ value: 'command', label: 'VS Code 命令' }, { value: 'terminal', label: '终端命令' }, { value: 'url', label: '打开 URL' }]) + commandField(item) + comboField('分组', 'group', item.group, groupOptions(item.group).map((option) => option.value)) + iconPicker(item.icon) +
         actionFields(item) + errorHtml + '</div></section>';
     }
 
