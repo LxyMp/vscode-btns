@@ -7,6 +7,7 @@ import {
 } from './config';
 import { CustomActionItem } from './types';
 import { validateAllItems } from './validation';
+import { buildCommandQuickPickItems, collectCommandTitles } from './commandMetadata';
 
 interface WebviewMessage {
   type?: unknown;
@@ -85,10 +86,15 @@ export class ConfigPanel implements vscode.Disposable {
 
   private async sendState(wasCancelled = false): Promise<void> {
     const rawItems = getConfiguredItemsForEditor();
+    const commandIds = await vscode.commands.getCommands(true);
+    const commandItems = buildCommandQuickPickItems(
+      commandIds,
+      collectCommandTitles(vscode.extensions.all),
+    );
     await this.panel.webview.postMessage({
       type: 'state',
       wasCancelled,
-      commandIds: await vscode.commands.getCommands(true),
+      commandItems,
       icons: readCodicons(),
       items: Array.isArray(rawItems) ? rawItems : [],
       rootError: Array.isArray(rawItems) ? undefined : 'customActions.items 不是数组',
@@ -162,7 +168,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     :root { color-scheme: light dark; }
     * { box-sizing: border-box; }
     body { margin: 0; color: var(--vscode-foreground); background: var(--vscode-editor-background); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }
-    button, input, select, textarea { font: inherit; color: inherit; }
+    button, input { font: inherit; color: inherit; }
     button { cursor: pointer; }
     button:disabled { cursor: default; opacity: .45; }
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 16px; background: var(--vscode-editor-background); border-bottom: 1px solid var(--vscode-panel-border); }
@@ -184,9 +190,8 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
     .field.full { grid-column: 1 / -1; }
     .field label { color: var(--vscode-descriptionForeground); font-size: 12px; }
-    .field input, .field textarea, .menu-select > button, .icon-picker > button { width: 100%; min-height: 30px; padding: 5px 7px; border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px; outline: none; background: var(--vscode-input-background); color: var(--vscode-input-foreground); text-align: left; }
-    .field textarea { min-height: 64px; resize: vertical; font-family: var(--vscode-editor-font-family); }
-    .field input:focus, .field textarea:focus, .menu-select > button:focus, .icon-picker > button:focus { border-color: var(--vscode-focusBorder); }
+    .field input, .menu-select > button, .icon-picker > button { width: 100%; min-height: 30px; padding: 5px 7px; border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px; outline: none; background: var(--vscode-input-background); color: var(--vscode-input-foreground); text-align: left; }
+    .field input:focus, .menu-select > button:focus, .icon-picker > button:focus { border-color: var(--vscode-focusBorder); }
     .menu-select, .icon-picker, .combo { position: relative; }
     .menu-select > button, .icon-picker > button { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
     .menu-select > button::after, .icon-picker > button::after, .combo::after { content: '⌄'; color: var(--vscode-descriptionForeground); position: absolute; right: 8px; top: 6px; pointer-events: none; }
@@ -194,13 +199,20 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     .icon-menu { max-height: none; overflow: hidden; padding: 4px; }
     .icon-options { max-height: 180px; overflow-y: auto; }
     .menu button, .icon-menu button, .combo-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 4px 7px; border: 0; background: transparent; color: var(--vscode-menu-foreground, var(--vscode-foreground)); text-align: left; }
+    .command-option { flex-direction: column; align-items: flex-start !important; gap: 2px !important; }
+    .command-label { font-size: 13px; }
+    .command-detail { color: var(--vscode-descriptionForeground); font-size: 12px; }
     .menu button:hover, .icon-menu button:hover { background: var(--vscode-list-hoverBackground); }
     .icon-preview { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 3px; background: var(--vscode-button-secondaryBackground); }
     .icon-check { display: inline-flex; align-items: center; justify-content: center; width: 18px; flex: 0 0 18px; color: var(--vscode-testing-iconPassed); font-weight: 700; }
     .icon-search { display: block; position: static; width: 100%; margin: 0 0 4px; }
     .menu-select .menu.hidden, .icon-picker .icon-menu.hidden, .combo-menu.hidden { display: none; }
-    .checks { display: flex; align-items: center; gap: 18px; min-height: 30px; }
-    .checks label { display: inline-flex; align-items: center; gap: 6px; color: var(--vscode-foreground); }
+    .checks { display: flex; align-items: center; gap: 24px; min-height: 34px; }
+    .checks label { display: inline-flex; align-items: center; gap: 8px; color: var(--vscode-foreground); }
+    .check-option { position: relative; cursor: pointer; }
+    .check-option input { position: absolute; opacity: 0; pointer-events: none; }
+    .check-box { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid var(--vscode-checkbox-border, var(--vscode-input-border)); border-radius: 3px; background: var(--vscode-checkbox-background, var(--vscode-input-background)); color: transparent; font-size: 13px; font-weight: 700; }
+    .check-option input:checked + .check-box { border-color: var(--vscode-checkbox-border, var(--vscode-focusBorder)); background: var(--vscode-checkbox-background, var(--vscode-button-background)); color: var(--vscode-checkbox-foreground, var(--vscode-button-foreground)); }
     .errors { grid-column: 1 / -1; margin: 0; padding: 8px 10px; background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); color: var(--vscode-inputValidation-errorForeground); }
     .hidden { display: none !important; }
     @media (max-width: 680px) { .toolbar { flex-wrap: wrap; } .toolbar-title { width: 100%; } .action-body { grid-template-columns: 1fr; } .field.full { grid-column: 1; } }
@@ -219,7 +231,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
   </main>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    const state = { items: [], commandIds: [], icons: [], dirty: false, errors: [] };
+    const state = { items: [], commandItems: [], icons: [], dirty: false, errors: [] };
     const actionsElement = document.getElementById('actions');
     const statusElement = document.getElementById('status');
     const saveButton = document.getElementById('save');
@@ -237,7 +249,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     window.addEventListener('message', (event) => {
       const message = event.data;
       if (message.type === 'state') {
-        state.commandIds = Array.isArray(message.commandIds) ? message.commandIds : [];
+        state.commandItems = Array.isArray(message.commandItems) ? message.commandItems : [];
         state.icons = Array.isArray(message.icons) ? message.icons : [];
         state.items = normalizeItems(message.items);
         state.dirty = false;
@@ -285,8 +297,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
           action: {
             type: ['command', 'terminal', 'url'].includes(action.type) ? action.type : 'command',
             command: stringValue(action.command), url: stringValue(action.url),
-            argsText: JSON.stringify(Array.isArray(action.args) ? action.args : [], null, 2),
-            cwd: stringValue(action.cwd), terminalName: stringValue(action.terminalName),
+            cwd: action.type === 'terminal' ? stringValue(action.cwd) || '\${workspaceFolder}' : stringValue(action.cwd), terminalName: stringValue(action.terminalName),
             reuse: action.reuse !== false, reveal: action.reveal !== false
           }
         };
@@ -299,7 +310,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
       let suffix = state.items.length + 1;
       let id = '新动作';
       while (state.items.some((item) => item.id === id)) { id = '新动作 ' + suffix++; }
-      state.items.push({ id, label: id, group: '', icon: '', isNew: true, isDirty: true, action: { type: 'command', command: '', url: '', argsText: '[]', cwd: '\${workspaceFolder}', terminalName: '', reuse: true, reveal: true } });
+      state.items.push({ id, label: id, group: '', icon: '', isNew: true, isDirty: true, action: { type: 'command', command: '', url: '', cwd: '\${workspaceFolder}', terminalName: '', reuse: true, reveal: true } });
       markDirty();
       render();
       document.querySelector('[data-index="' + (state.items.length - 1) + '"] input[data-field="label"]')?.focus();
@@ -336,10 +347,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         const output = compact({ id: item.id.trim(), label: item.label.trim(), group: item.group.trim(), icon: item.icon.trim(), action: {} });
         if (item.action.type === 'command') {
           if (!item.action.command.trim()) errors.push(error(itemId, 'action.command', 'command 必须是非空字符串'));
-          let args = [];
-          try { args = JSON.parse(item.action.argsText || '[]'); if (!Array.isArray(args)) throw new Error(); }
-          catch { errors.push(error(itemId, 'action.args', '参数必须是 JSON 数组')); }
-          output.action = { type: 'command', command: item.action.command.trim(), args };
+          output.action = { type: 'command', command: item.action.command.trim() };
         } else if (item.action.type === 'terminal') {
           if (!item.action.command.trim()) errors.push(error(itemId, 'action.command', 'command 必须是非空字符串'));
           output.action = compact({ type: 'terminal', command: item.action.command, cwd: item.action.cwd.trim(), terminalName: item.action.terminalName.trim(), reuse: item.action.reuse, reveal: item.action.reveal });
@@ -382,26 +390,25 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     }
 
     function actionFields(item) {
-      if (item.action.type === 'command') return textarea('参数（JSON 数组）', 'action.argsText', item.action.argsText);
-      if (item.action.type === 'terminal') return field('工作目录', 'action.cwd', item.action.cwd) + field('终端名称', 'action.terminalName', item.action.terminalName) + '<div class="field"><label>终端行为</label><div class="checks"><label><input type="checkbox" data-field="action.reuse"' + checked(item.action.reuse) + '>复用终端</label><label><input type="checkbox" data-field="action.reveal"' + checked(item.action.reveal) + '>显示终端</label></div></div>';
+      if (item.action.type === 'terminal') return field('工作目录', 'action.cwd', item.action.cwd) + field('终端名称', 'action.terminalName', item.action.terminalName) + '<div class="field full"><label>终端行为</label><div class="checks"><label class="check-option"><input type="checkbox" data-field="action.reuse"' + checked(item.action.reuse) + '><span class="check-box">✓</span><span>复用终端</span></label><label class="check-option"><input type="checkbox" data-field="action.reveal"' + checked(item.action.reveal) + '><span class="check-box">✓</span><span>显示终端</span></label></div></div>';
       return '';
     }
 
     function commandField(item) {
       if (item.action.type === 'command') {
-        const commandOptions = [...new Set([...state.commandIds.slice().sort().slice(0, 300), item.action.command])];
-        return comboField('命令 ID', 'action.command', item.action.command, commandOptions);
+        return commandComboField(item.action.command);
       }
       if (item.action.type === 'terminal') return field('终端命令', 'action.command', item.action.command, false);
       return field('URL', 'action.url', item.action.url, false);
     }
 
     function field(label, name, value, full) { return '<div class="field ' + (full ? 'full' : '') + '"><label>' + label + '</label><input data-field="' + name + '" value="' + escapeAttr(value) + '"></div>'; }
-    function textarea(label, name, value) { return '<div class="field full"><label>' + label + '</label><textarea data-field="' + name + '">' + escapeHtml(value) + '</textarea></div>'; }
     function iconButton(symbol, title, action, disabled) { return '<button class="icon-button" type="button" data-action="' + action + '" title="' + title + '"' + (disabled ? ' disabled' : '') + '>' + symbol + '</button>'; }
     function checked(value) { return value ? ' checked' : ''; }
     function groupOptions(current) { const values = [...new Set(state.items.map((item) => item.group).filter(Boolean))]; if (current && !values.includes(current)) values.unshift(current); return [{ value: '', label: '无分组' }, ...values.map((value) => ({ value, label: value }))]; }
     function comboField(label, name, value, options) { const available = options.filter(Boolean); if (!available.length) return field(label, name, value, false); return '<div class="field"><label>' + label + '</label><div class="combo"><input data-field="' + name + '" value="' + escapeAttr(value) + '"><div class="combo-menu hidden">' + available.map((option) => '<button type="button" data-value="' + escapeAttr(option) + '">' + escapeHtml(option) + '</button>').join('') + '</div></div></div>'; }
+    function commandComboField(value) { return '<div class="field"><label>命令 ID</label><div class="combo command-combo"><input data-field="action.command" value="' + escapeAttr(value) + '"><div class="combo-menu hidden"></div></div></div>'; }
+    function populateCommandMenu(menu, currentValue, input) { const items = state.commandItems.slice(); if (currentValue && !items.some((item) => item.commandId === currentValue)) items.unshift({ commandId: currentValue, label: '命令：' + currentValue, detail: '描述：' + currentValue }); menu.innerHTML = items.map((item) => '<button class="command-option" type="button" data-value="' + escapeAttr(item.commandId) + '" data-search="' + escapeAttr(item.label + ' ' + item.detail) + '"><span class="command-label">' + escapeHtml(item.label) + '</span><span class="command-detail">' + escapeHtml(item.detail) + '</span></button>').join(''); menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => { input.value = option.dataset.value; input.dispatchEvent(new Event('input', { bubbles: true })); menu.classList.add('hidden'); })); }
     function menuSelect(label, name, value, options) { return '<div class="field"><label>' + label + '</label><div class="menu-select" data-select="' + name + '"><button type="button">' + escapeHtml(options.find((option) => option.value === value)?.label || value) + '</button><div class="menu hidden">' + options.map((option) => '<button type="button" data-value="' + escapeAttr(option.value) + '">' + escapeHtml(option.label) + '</button>').join('') + '</div></div></div>'; }
     function iconPicker(value) { const current = state.icons.find((icon) => icon.name === value) || { name: value, character: value ? '◇' : '·' }; return '<div class="field"><label>图标</label><div class="icon-picker" data-select="icon"><button type="button"><span><span class="icon-preview codicon">' + current.character + '</span> ' + escapeHtml(current.name || '无图标') + '</span></button><div class="icon-menu hidden"></div></div></div>'; }
     function populateIconMenu(menu, currentValue, index) { const icons = [{ name: '', character: '·' }, ...state.icons]; menu.innerHTML = '<input class="icon-search" placeholder="搜索图标..."><div class="icon-options">' + icons.map((icon) => '<button type="button" data-value="' + escapeAttr(icon.name) + '"><span class="icon-check">' + (icon.name === currentValue ? '✓' : '') + '</span><span class="icon-preview codicon">' + icon.character + '</span><span>' + escapeHtml(icon.name || '无图标') + '</span></button>').join('') + '</div>'; const search = menu.querySelector('.icon-search'); search.addEventListener('input', () => menu.querySelectorAll('[data-value]').forEach((option) => option.classList.toggle('hidden', !option.dataset.value.includes(search.value.toLowerCase())))); menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => { state.items[index].icon = option.dataset.value; markItemDirty(index); state.errors = []; render(); })); }
@@ -424,7 +431,10 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
             const fieldName = select.dataset.select;
             if (fieldName === 'icon') state.items[index].icon = value;
             else if (fieldName === 'group') state.items[index].group = value;
-            else state.items[index].action.type = value;
+            else {
+              state.items[index].action.type = value;
+              if (value === 'terminal' && !state.items[index].action.cwd) state.items[index].action.cwd = '\${workspaceFolder}';
+            }
             state.errors = [];
             markItemDirty(index);
             render();
@@ -433,11 +443,13 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         element.querySelectorAll('.combo').forEach((combo) => {
           const input = combo.querySelector('input[data-field]');
           const menu = combo.querySelector('.combo-menu');
-          input.addEventListener('focus', () => { closeMenus(); menu.classList.remove('hidden'); });
+          input.addEventListener('focus', () => { closeMenus(); if (combo.classList.contains('command-combo') && !menu.childElementCount) populateCommandMenu(menu, input.value, input); menu.classList.remove('hidden'); });
           input.addEventListener('input', () => {
+            if (combo.classList.contains('command-combo') && !menu.childElementCount) populateCommandMenu(menu, input.value, input);
             menu.classList.remove('hidden');
             menu.querySelectorAll('[data-value]').forEach((option) => {
-              option.classList.toggle('hidden', !option.dataset.value.toLowerCase().includes(input.value.toLowerCase()));
+              const searchable = (option.dataset.search || option.dataset.value).toLowerCase();
+              option.classList.toggle('hidden', !searchable.includes(input.value.toLowerCase()));
             });
           });
           menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => {

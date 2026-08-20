@@ -66,8 +66,7 @@ function getOrCreateTerminal(action: TerminalAction): vscode.Terminal {
  * 执行 command 动作
  */
 async function runCommandAction(action: CommandAction): Promise<void> {
-  const args = action.args || [];
-  await vscode.commands.executeCommand(action.command, ...args);
+  await vscode.commands.executeCommand(action.command);
 }
 
 /**

@@ -156,10 +156,6 @@
                       "command": {
                         "type": "string",
                         "description": "VS Code 命令"
-                      },
-                      "args": {
-                        "type": "array",
-                        "description": "命令参数"
                       }
                     }
                   },

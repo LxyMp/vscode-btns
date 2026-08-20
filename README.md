@@ -11,7 +11,7 @@ Custom Actions Panel 是一个配置驱动的 VS Code 快捷动作面板。它�
 - 新增、删除及上下调整动作顺序
 - 编辑名称、ID、分组和图标
 - 根据动作行为编辑 VS Code 命令、终端命令或 URL
-- 在保存前检查必填字段、重复 ID、参数格式和 URL
+- 在保存前检查必填字段、重复 ID 和 URL
 
 保存后仍使用 VS Code 标准设置项 `customActions.items` 存储，因此现有 `settings.json` 配置继续兼容。
 
@@ -54,7 +54,7 @@ Custom Actions Panel 是一个配置驱动的 VS Code 快捷动作面板。它�
 
 ## 动作类型
 
-- `command`：执行 VS Code 命令，可选 `args` 数组。
+- `command`：执行 VS Code 命令。
 - `terminal`：创建或复用终端。支持 `cwd`、`terminalName`、`reuse` 和 `reveal`。
 - `url`：使用系统默认浏览器打开 URL。
 
@@ -77,7 +77,7 @@ Custom Actions Panel 是一个配置驱动的 VS Code 快捷动作面板。它�
 
 ## 配置校验
 
-面板会标记无效动作。校验包括必填字段、字段类型、重复 `id`、命令参数数组以及 URL 协议。点击无效动作前会再次校验并显示具体错误。
+面板会标记无效动作。校验包括必填字段、字段类型、重复 `id` 以及 URL 协议。点击无效动作前会再次校验并显示具体错误。
 
 ## 安全
 

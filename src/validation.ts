@@ -71,10 +71,6 @@ export function validateItem(item: unknown): ValidationError[] {
     }
   }
 
-  if (action.type === ActionType.Command && action.args !== undefined && !Array.isArray(action.args)) {
-    errors.push({ itemId, field: 'action.args', message: 'args 必须是数组' });
-  }
-
   if (action.type === ActionType.Terminal) {
     for (const field of ['cwd', 'terminalName']) {
       if (action[field] !== undefined && typeof action[field] !== 'string') {

@@ -13,7 +13,6 @@ export enum ActionType {
 export interface CommandAction {
   type: ActionType.Command;
   command: string;
-  args?: unknown[];
 }
 
 /**
