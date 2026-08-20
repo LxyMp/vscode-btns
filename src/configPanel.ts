@@ -11,6 +11,7 @@ import { validateAllItems } from './validation';
 interface WebviewMessage {
   type?: unknown;
   items?: unknown;
+  index?: unknown;
 }
 
 export class ConfigPanel implements vscode.Disposable {
@@ -64,6 +65,18 @@ export class ConfigPanel implements vscode.Disposable {
       case 'reload':
         await this.sendState(true);
         break;
+      case 'confirmCancel':
+        if (await this.confirm('确定放弃当前未保存的修改吗？')) {
+          await this.panel.webview.postMessage({ type: 'cancelConfirmed' });
+        } else {
+          await this.panel.webview.postMessage({ type: 'cancelRejected' });
+        }
+        break;
+      case 'confirmDelete':
+        if (typeof message.index === 'number' && await this.confirm('确定删除这个动作吗？')) {
+          await this.panel.webview.postMessage({ type: 'deleteConfirmed', index: message.index });
+        }
+        break;
       case 'save':
         await this.save(message.items);
         break;
@@ -102,6 +115,11 @@ export class ConfigPanel implements vscode.Disposable {
   private async postSaveError(message: string): Promise<void> {
     await this.panel.webview.postMessage({ type: 'saveError', message });
     vscode.window.showErrorMessage(message);
+  }
+
+  private async confirm(message: string): Promise<boolean> {
+    const choice = await vscode.window.showWarningMessage(message, { modal: true }, '确认');
+    return choice === '确认';
   }
 }
 
@@ -240,8 +258,17 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         state.items.forEach((item) => { item.isNew = false; item.isDirty = false; });
         state.dirty = false;
         state.errors = [];
+        render();
         renderToolbar();
         setStatus('已保存');
+      } else if (message.type === 'cancelConfirmed') {
+        vscode.postMessage({ type: 'reload' });
+      } else if (message.type === 'cancelRejected') {
+        renderToolbar();
+      } else if (message.type === 'deleteConfirmed' && Number.isInteger(message.index)) {
+        state.items.splice(message.index, 1);
+        markDirty();
+        render();
       } else if (message.type === 'saveError') {
         setStatus(message.message, true);
       }
@@ -293,9 +320,8 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
 
     function cancel() {
       if (!state.dirty) return;
-      if (!confirm('确定放弃当前未保存的修改吗？')) return;
       cancelButton.disabled = true;
-      vscode.postMessage({ type: 'reload' });
+      vscode.postMessage({ type: 'confirmCancel' });
     }
 
     function serializeItems() {
@@ -441,8 +467,8 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
 
     function applyAction(index, action) {
       if (action === 'delete') {
-        if (!confirm('确定删除“' + (state.items[index].label || state.items[index].id) + '”吗？')) return;
-        state.items.splice(index, 1);
+        vscode.postMessage({ type: 'confirmDelete', index });
+        return;
       } else if (action === 'up' && index > 0) {
         [state.items[index - 1], state.items[index]] = [state.items[index], state.items[index - 1]];
         state.items[index - 1].isDirty = true;
