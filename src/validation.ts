@@ -42,7 +42,7 @@ export function validateItem(item: unknown): ValidationError[] {
   if (!isNonEmptyString(item.label)) {
     errors.push({ itemId, field: 'label', message: 'label 必须是非空字符串' });
   }
-  for (const field of ['group', 'description', 'tooltip', 'icon']) {
+  for (const field of ['group', 'description', 'icon']) {
     validateOptionalString(itemId, item, field, errors);
   }
 

@@ -16,24 +16,20 @@ export function getRawConfiguredItems(): unknown {
   return config.get<unknown>('items', []);
 }
 
-export type ConfigurationScope = 'user' | 'workspace';
-
-export function getConfiguredItemsForScope(scope: ConfigurationScope): unknown {
+export function getConfiguredItemsForEditor(): unknown {
   const inspected = vscode.workspace.getConfiguration('customActions').inspect<unknown>('items');
-  const value = scope === 'user' ? inspected?.globalValue : inspected?.workspaceValue;
-  return value ?? [];
+  return inspected?.workspaceValue ?? inspected?.globalValue ?? [];
 }
 
-export function getPreferredConfigurationScope(): ConfigurationScope {
+export function getConfigurationTargetForEditor(): vscode.ConfigurationTarget {
   const inspected = vscode.workspace.getConfiguration('customActions').inspect<unknown>('items');
-  return inspected?.workspaceValue !== undefined ? 'workspace' : 'user';
+  return inspected?.workspaceValue !== undefined
+    ? vscode.ConfigurationTarget.Workspace
+    : vscode.ConfigurationTarget.Global;
 }
 
-export async function updateConfiguredItemsForScope(
-  scope: ConfigurationScope,
-  items: CustomActionItem[],
-): Promise<void> {
-  const target =
-    scope === 'user' ? vscode.ConfigurationTarget.Global : vscode.ConfigurationTarget.Workspace;
-  await vscode.workspace.getConfiguration('customActions').update('items', items, target);
+export async function updateConfiguredItemsForEditor(items: CustomActionItem[]): Promise<void> {
+  await vscode.workspace
+    .getConfiguration('customActions')
+    .update('items', items, getConfigurationTargetForEditor());
 }

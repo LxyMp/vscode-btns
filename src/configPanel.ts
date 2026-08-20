@@ -1,16 +1,13 @@
 import * as vscode from 'vscode';
 import {
-  ConfigurationScope,
-  getConfiguredItemsForScope,
-  getPreferredConfigurationScope,
-  updateConfiguredItemsForScope,
+  getConfiguredItemsForEditor,
+  updateConfiguredItemsForEditor,
 } from './config';
 import { CustomActionItem } from './types';
 import { validateAllItems } from './validation';
 
 interface WebviewMessage {
   type?: unknown;
-  scope?: unknown;
   items?: unknown;
 }
 
@@ -33,7 +30,6 @@ export class ConfigPanel implements vscode.Disposable {
     ConfigPanel.current = new ConfigPanel(panel, context);
   }
 
-  private scope: ConfigurationScope = getPreferredConfigurationScope();
   private readonly disposables: vscode.Disposable[] = [];
 
   private constructor(
@@ -63,41 +59,23 @@ export class ConfigPanel implements vscode.Disposable {
       case 'ready':
         await this.sendState();
         break;
-      case 'selectScope':
-        if (message.scope === 'user' || message.scope === 'workspace') {
-          if (message.scope === 'workspace' && !hasWorkspace()) {
-            return;
-          }
-          this.scope = message.scope;
-          await this.sendState();
-        }
-        break;
       case 'save':
-        await this.save(message.scope, message.items);
+        await this.save(message.items);
         break;
     }
   }
 
   private async sendState(): Promise<void> {
-    const rawItems = getConfiguredItemsForScope(this.scope);
+    const rawItems = getConfiguredItemsForEditor();
     await this.panel.webview.postMessage({
       type: 'state',
-      scope: this.scope,
-      workspaceAvailable: hasWorkspace(),
+      commandIds: await vscode.commands.getCommands(true),
       items: Array.isArray(rawItems) ? rawItems : [],
-      rootError: Array.isArray(rawItems) ? undefined : '当前范围的 customActions.items 不是数组',
+      rootError: Array.isArray(rawItems) ? undefined : 'customActions.items 不是数组',
     });
   }
 
-  private async save(scope: unknown, items: unknown): Promise<void> {
-    if (scope !== 'user' && scope !== 'workspace') {
-      return;
-    }
-    if (scope === 'workspace' && !hasWorkspace()) {
-      await this.postSaveError('当前没有打开工作区，无法保存工作区配置');
-      return;
-    }
-
+  private async save(items: unknown): Promise<void> {
     const errors = validateAllItems(items);
     if (errors.length > 0) {
       await this.panel.webview.postMessage({ type: 'validationErrors', errors });
@@ -105,8 +83,7 @@ export class ConfigPanel implements vscode.Disposable {
     }
 
     try {
-      await updateConfiguredItemsForScope(scope, items as CustomActionItem[]);
-      this.scope = scope;
+      await updateConfiguredItemsForEditor(items as CustomActionItem[]);
       await this.panel.webview.postMessage({ type: 'saved' });
       vscode.window.showInformationMessage('快捷动作配置已保存');
     } catch (error) {
@@ -119,10 +96,6 @@ export class ConfigPanel implements vscode.Disposable {
     await this.panel.webview.postMessage({ type: 'saveError', message });
     vscode.window.showErrorMessage(message);
   }
-}
-
-function hasWorkspace(): boolean {
-  return Boolean(vscode.workspace.workspaceFolders?.length);
 }
 
 function getNonce(): string {
@@ -152,10 +125,6 @@ function getWebviewHtml(webview: vscode.Webview): string {
     button:disabled { cursor: default; opacity: .45; }
     .toolbar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 16px; background: var(--vscode-editor-background); border-bottom: 1px solid var(--vscode-panel-border); }
     .toolbar-title { margin-right: auto; font-size: 15px; font-weight: 600; }
-    .scope { display: flex; border: 1px solid var(--vscode-button-border, var(--vscode-panel-border)); border-radius: 4px; overflow: hidden; }
-    .scope button { min-width: 76px; min-height: 30px; border: 0; border-right: 1px solid var(--vscode-button-border, var(--vscode-panel-border)); background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
-    .scope button:last-child { border-right: 0; }
-    .scope button.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
     .command { min-height: 30px; padding: 0 12px; border: 1px solid var(--vscode-button-border, transparent); border-radius: 4px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
     .command.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
     .icon-button { width: 30px; height: 30px; padding: 0; border: 1px solid var(--vscode-button-border, var(--vscode-panel-border)); border-radius: 4px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); font-size: 16px; }
@@ -172,9 +141,17 @@ function getWebviewHtml(webview: vscode.Webview): string {
     .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
     .field.full { grid-column: 1 / -1; }
     .field label { color: var(--vscode-descriptionForeground); font-size: 12px; }
-    .field input, .field select, .field textarea { width: 100%; min-height: 30px; padding: 5px 7px; border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px; outline: none; background: var(--vscode-input-background); color: var(--vscode-input-foreground); }
+    .field input, .field textarea, .menu-select button, .icon-picker button { width: 100%; min-height: 30px; padding: 5px 7px; border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px; outline: none; background: var(--vscode-input-background); color: var(--vscode-input-foreground); text-align: left; }
     .field textarea { min-height: 64px; resize: vertical; font-family: var(--vscode-editor-font-family); }
-    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--vscode-focusBorder); }
+    .field input:focus, .field textarea:focus, .menu-select button:focus, .icon-picker button:focus { border-color: var(--vscode-focusBorder); }
+    .menu-select, .icon-picker, .combo { position: relative; }
+    .menu-select button, .icon-picker button { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+    .menu-select button::after, .icon-picker button::after, .combo::after { content: '⌄'; color: var(--vscode-descriptionForeground); position: absolute; right: 8px; top: 6px; pointer-events: none; }
+    .menu, .icon-menu, .combo-menu { position: absolute; left: 0; right: 0; z-index: 20; max-height: 220px; overflow: auto; margin-top: 3px; padding: 4px; border: 1px solid var(--vscode-focusBorder); border-radius: 4px; background: var(--vscode-menu-background, var(--vscode-editor-background)); box-shadow: 0 6px 18px rgba(0,0,0,.28); }
+    .menu button, .icon-menu button, .combo-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 4px 7px; border: 0; background: transparent; color: var(--vscode-menu-foreground, var(--vscode-foreground)); text-align: left; }
+    .menu button:hover, .icon-menu button:hover { background: var(--vscode-list-hoverBackground); }
+    .icon-preview { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 3px; background: var(--vscode-button-secondaryBackground); }
+    .menu-select .menu.hidden, .icon-picker .icon-menu.hidden, .combo-menu.hidden { display: none; }
     .checks { display: flex; align-items: center; gap: 18px; min-height: 30px; }
     .checks label { display: inline-flex; align-items: center; gap: 6px; color: var(--vscode-foreground); }
     .errors { grid-column: 1 / -1; margin: 0; padding: 8px 10px; background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); color: var(--vscode-inputValidation-errorForeground); }
@@ -185,10 +162,6 @@ function getWebviewHtml(webview: vscode.Webview): string {
 <body>
   <header class="toolbar">
     <div class="toolbar-title">快捷动作配置</div>
-    <div class="scope" aria-label="配置范围">
-      <button id="scope-user" type="button">用户</button>
-      <button id="scope-workspace" type="button">工作区</button>
-    </div>
     <button id="add" class="command secondary" type="button">新增动作</button>
     <button id="save" class="command" type="button">保存</button>
   </header>
@@ -198,22 +171,17 @@ function getWebviewHtml(webview: vscode.Webview): string {
   </main>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    const state = { scope: 'user', workspaceAvailable: false, items: [], dirty: false, errors: [] };
+    const state = { items: [], commandIds: [], dirty: false, errors: [] };
     const actionsElement = document.getElementById('actions');
     const statusElement = document.getElementById('status');
     const saveButton = document.getElementById('save');
-    const workspaceButton = document.getElementById('scope-workspace');
-
-    document.getElementById('scope-user').addEventListener('click', () => selectScope('user'));
-    workspaceButton.addEventListener('click', () => selectScope('workspace'));
     document.getElementById('add').addEventListener('click', addItem);
     saveButton.addEventListener('click', save);
 
     window.addEventListener('message', (event) => {
       const message = event.data;
       if (message.type === 'state') {
-        state.scope = message.scope;
-        state.workspaceAvailable = message.workspaceAvailable;
+        state.commandIds = Array.isArray(message.commandIds) ? message.commandIds : [];
         state.items = normalizeItems(message.items);
         state.dirty = false;
         state.errors = [];
@@ -223,6 +191,11 @@ function getWebviewHtml(webview: vscode.Webview): string {
         state.errors = message.errors || [];
         render();
         setStatus('请修正配置错误后再保存', true);
+        requestAnimationFrame(() => {
+          const invalid = document.querySelector('.action.invalid');
+          invalid?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+          if (invalid) window.scrollBy({ top: -64, behavior: 'smooth' });
+        });
       } else if (message.type === 'saved') {
         state.dirty = false;
         state.errors = [];
@@ -239,8 +212,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
         const action = item && typeof item.action === 'object' ? item.action : {};
         return {
           id: stringValue(item && item.id), label: stringValue(item && item.label),
-          group: stringValue(item && item.group), description: stringValue(item && item.description),
-          tooltip: stringValue(item && item.tooltip), icon: stringValue(item && item.icon),
+          group: stringValue(item && item.group), description: stringValue(item && item.description), icon: stringValue(item && item.icon),
           action: {
             type: ['command', 'terminal', 'url'].includes(action.type) ? action.type : 'command',
             command: stringValue(action.command), url: stringValue(action.url),
@@ -254,17 +226,11 @@ function getWebviewHtml(webview: vscode.Webview): string {
 
     function stringValue(value) { return typeof value === 'string' ? value : ''; }
 
-    function selectScope(scope) {
-      if (scope === state.scope || (scope === 'workspace' && !state.workspaceAvailable)) return;
-      if (state.dirty && !confirm('当前修改尚未保存，确定切换配置范围吗？')) return;
-      vscode.postMessage({ type: 'selectScope', scope });
-    }
-
     function addItem() {
       let suffix = state.items.length + 1;
-      let id = 'action-' + suffix;
-      while (state.items.some((item) => item.id === id)) { suffix += 1; id = 'action-' + suffix; }
-      state.items.push({ id, label: '新动作', group: '', description: '', tooltip: '', icon: '', action: { type: 'command', command: '', url: '', argsText: '[]', cwd: '\${workspaceFolder}', terminalName: '', reuse: true, reveal: true } });
+      let id = '新动作';
+      while (state.items.some((item) => item.id === id)) { id = '新动作 ' + suffix++; }
+      state.items.push({ id, label: id, group: '', description: '', icon: '', action: { type: 'command', command: '', url: '', argsText: '[]', cwd: '\${workspaceFolder}', terminalName: '', reuse: true, reveal: true } });
       markDirty();
       render();
       document.querySelector('[data-index="' + (state.items.length - 1) + '"] input[data-field="label"]')?.focus();
@@ -280,7 +246,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
       }
       saveButton.disabled = true;
       setStatus('正在保存...');
-      vscode.postMessage({ type: 'save', scope: state.scope, items: result.items });
+      vscode.postMessage({ type: 'save', items: result.items });
     }
 
     function serializeItems() {
@@ -292,7 +258,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
         if (ids.has(item.id.trim())) errors.push(error(itemId, 'id', 'id 重复'));
         ids.add(item.id.trim());
         if (!item.label.trim()) errors.push(error(itemId, 'label', 'label 必须是非空字符串'));
-        const output = compact({ id: item.id.trim(), label: item.label.trim(), group: item.group.trim(), description: item.description.trim(), tooltip: item.tooltip.trim(), icon: item.icon.trim(), action: {} });
+        const output = compact({ id: item.id.trim(), label: item.label.trim(), group: item.group.trim(), description: item.description.trim(), icon: item.icon.trim(), action: {} });
         if (item.action.type === 'command') {
           if (!item.action.command.trim()) errors.push(error(itemId, 'action.command', 'command 必须是非空字符串'));
           let args = [];
@@ -317,7 +283,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
     function render() {
       renderToolbar();
       if (!state.items.length) {
-        actionsElement.innerHTML = '<div class="empty">当前范围没有快捷动作</div>';
+        actionsElement.innerHTML = '<div class="empty">当前没有快捷动作</div>';
         return;
       }
       actionsElement.innerHTML = state.items.map(renderItem).join('');
@@ -325,9 +291,6 @@ function getWebviewHtml(webview: vscode.Webview): string {
     }
 
     function renderToolbar() {
-      document.getElementById('scope-user').classList.toggle('active', state.scope === 'user');
-      workspaceButton.classList.toggle('active', state.scope === 'workspace');
-      workspaceButton.disabled = !state.workspaceAvailable;
       saveButton.disabled = !state.dirty;
       saveButton.textContent = state.dirty ? '保存' : '已保存';
     }
@@ -338,23 +301,33 @@ function getWebviewHtml(webview: vscode.Webview): string {
       return '<section class="action ' + (itemErrors.length ? 'invalid' : '') + '" data-index="' + index + '">' +
         '<div class="action-header"><span class="action-index">' + (index + 1) + '</span><span class="action-name">' + escapeHtml(item.label || item.id || '未命名动作') + '</span>' +
         iconButton('↑', '上移', 'up', index === 0) + iconButton('↓', '下移', 'down', index === state.items.length - 1) + iconButton('×', '删除', 'delete', false) + '</div>' +
-        '<div class="action-body">' + field('ID', 'id', item.id) + field('名称', 'label', item.label) + field('分组', 'group', item.group) + field('图标 Codicon', 'icon', item.icon) +
-        field('描述', 'description', item.description) + field('悬浮提示', 'tooltip', item.tooltip) +
-        '<div class="field"><label>动作类型</label><select data-field="action.type"><option value="command"' + selected(item.action.type, 'command') + '>VS Code 命令</option><option value="terminal"' + selected(item.action.type, 'terminal') + '>终端命令</option><option value="url"' + selected(item.action.type, 'url') + '>打开 URL</option></select></div>' +
+        '<div class="action-body">' + field('名称', 'label', item.label) + field('ID', 'id', item.id) + menuSelect('行为', 'action.type', item.action.type, [{ value: 'command', label: 'VS Code 命令' }, { value: 'terminal', label: '终端命令' }, { value: 'url', label: '打开 URL' }]) + commandField(item) + comboField('分组', 'group', item.group, groupOptions(item.group).map((option) => option.value)) + iconPicker(item.icon) + field('描述', 'description', item.description) +
         actionFields(item) + errorHtml + '</div></section>';
     }
 
     function actionFields(item) {
-      if (item.action.type === 'command') return field('命令 ID', 'action.command', item.action.command, true) + textarea('参数（JSON 数组）', 'action.argsText', item.action.argsText);
-      if (item.action.type === 'terminal') return field('终端命令', 'action.command', item.action.command, true) + field('工作目录', 'action.cwd', item.action.cwd) + field('终端名称', 'action.terminalName', item.action.terminalName) + '<div class="field"><label>终端行为</label><div class="checks"><label><input type="checkbox" data-field="action.reuse"' + checked(item.action.reuse) + '>复用终端</label><label><input type="checkbox" data-field="action.reveal"' + checked(item.action.reveal) + '>显示终端</label></div></div>';
-      return field('URL', 'action.url', item.action.url, true);
+      if (item.action.type === 'command') return textarea('参数（JSON 数组）', 'action.argsText', item.action.argsText);
+      if (item.action.type === 'terminal') return field('工作目录', 'action.cwd', item.action.cwd) + field('终端名称', 'action.terminalName', item.action.terminalName) + '<div class="field"><label>终端行为</label><div class="checks"><label><input type="checkbox" data-field="action.reuse"' + checked(item.action.reuse) + '>复用终端</label><label><input type="checkbox" data-field="action.reveal"' + checked(item.action.reveal) + '>显示终端</label></div></div>';
+      return '';
+    }
+
+    function commandField(item) {
+      if (item.action.type === 'command') {
+        const commandOptions = [...new Set([...state.commandIds.slice().sort().slice(0, 300), item.action.command])];
+        return comboField('命令 ID', 'action.command', item.action.command, commandOptions);
+      }
+      if (item.action.type === 'terminal') return field('终端命令', 'action.command', item.action.command, false);
+      return field('URL', 'action.url', item.action.url, false);
     }
 
     function field(label, name, value, full) { return '<div class="field ' + (full ? 'full' : '') + '"><label>' + label + '</label><input data-field="' + name + '" value="' + escapeAttr(value) + '"></div>'; }
     function textarea(label, name, value) { return '<div class="field full"><label>' + label + '</label><textarea data-field="' + name + '">' + escapeHtml(value) + '</textarea></div>'; }
     function iconButton(symbol, title, action, disabled) { return '<button class="icon-button" type="button" data-action="' + action + '" title="' + title + '"' + (disabled ? ' disabled' : '') + '>' + symbol + '</button>'; }
-    function selected(current, value) { return current === value ? ' selected' : ''; }
     function checked(value) { return value ? ' checked' : ''; }
+    function groupOptions(current) { const values = [...new Set(state.items.map((item) => item.group).filter(Boolean))]; if (current && !values.includes(current)) values.unshift(current); return [{ value: '', label: '无分组' }, ...values.map((value) => ({ value, label: value }))]; }
+    function comboField(label, name, value, options) { return '<div class="field"><label>' + label + '</label><div class="combo"><input data-field="' + name + '" value="' + escapeAttr(value) + '"><div class="combo-menu hidden">' + options.filter(Boolean).map((option) => '<button type="button" data-value="' + escapeAttr(option) + '">' + escapeHtml(option) + '</button>').join('') + '</div></div></div>'; }
+    function menuSelect(label, name, value, options) { return '<div class="field"><label>' + label + '</label><div class="menu-select" data-select="' + name + '"><button type="button">' + escapeHtml(options.find((option) => option.value === value)?.label || value) + '</button><div class="menu hidden">' + options.map((option) => '<button type="button" data-value="' + escapeAttr(option.value) + '">' + escapeHtml(option.label) + '</button>').join('') + '</div></div></div>'; }
+    function iconPicker(value) { const icons = [{ name: '', glyph: '·' }, { name: 'rocket', glyph: '🚀' }, { name: 'globe', glyph: '🌐' }, { name: 'terminal', glyph: '▣' }, { name: 'zap', glyph: 'ϟ' }, { name: 'gear', glyph: '⚙' }, { name: 'play', glyph: '▶' }, { name: 'debug', glyph: '◇' }, { name: 'package', glyph: '□' }, { name: 'book', glyph: '▤' }]; const current = icons.find((icon) => icon.name === value) || { name: value, glyph: '◈' }; return '<div class="field"><label>图标</label><div class="icon-picker" data-select="icon"><button type="button"><span><span class="icon-preview">' + current.glyph + '</span> ' + escapeHtml(current.name || '无图标') + '</span></button><div class="icon-menu hidden">' + icons.map((icon) => '<button type="button" data-value="' + escapeAttr(icon.name) + '"><span class="icon-preview">' + icon.glyph + '</span>' + escapeHtml(icon.name || '无图标') + '</button>').join('') + '</div></div></div>'; }
 
     function bindItemEvents() {
       document.querySelectorAll('.action').forEach((element) => {
@@ -364,16 +337,52 @@ function getWebviewHtml(webview: vscode.Webview): string {
           input.addEventListener('change', () => updateField(index, input));
         });
         element.querySelectorAll('[data-action]').forEach((button) => button.addEventListener('click', () => applyAction(index, button.dataset.action)));
+        element.querySelectorAll('[data-select]').forEach((select) => {
+          const trigger = select.querySelector(':scope > button');
+          const menu = select.querySelector(':scope > .menu, :scope > .icon-menu');
+          trigger.addEventListener('click', () => menu.classList.toggle('hidden'));
+          menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => {
+            const value = option.dataset.value;
+            const fieldName = select.dataset.select;
+            if (fieldName === 'icon') state.items[index].icon = value;
+            else if (fieldName === 'group') state.items[index].group = value;
+            else state.items[index].action.type = value;
+            state.errors = [];
+            markDirty();
+            render();
+          }));
+        });
+        element.querySelectorAll('.combo').forEach((combo) => {
+          const input = combo.querySelector('input[data-field]');
+          const menu = combo.querySelector('.combo-menu');
+          input.addEventListener('focus', () => menu.classList.remove('hidden'));
+          input.addEventListener('input', () => {
+            menu.classList.remove('hidden');
+            menu.querySelectorAll('[data-value]').forEach((option) => {
+              option.classList.toggle('hidden', !option.dataset.value.toLowerCase().includes(input.value.toLowerCase()));
+            });
+          });
+          menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => {
+            input.value = option.dataset.value;
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            menu.classList.add('hidden');
+          }));
+        });
       });
     }
 
     function updateField(index, input) {
       const path = input.dataset.field.split('.');
       const value = input.type === 'checkbox' ? input.checked : input.value;
+      const previousLabel = state.items[index].label;
       if (path.length === 1) state.items[index][path[0]] = value;
       else state.items[index][path[0]][path[1]] = value;
       state.errors = [];
       markDirty();
+      if (input.dataset.field === 'label' && (!state.items[index].id || state.items[index].id === previousLabel)) {
+        state.items[index].id = value;
+        input.closest('.action').querySelector('[data-field="id"]').value = state.items[index].id;
+      }
       if (input.dataset.field === 'label') input.closest('.action').querySelector('.action-name').textContent = value || state.items[index].id || '未命名动作';
       if (input.dataset.field === 'action.type') render();
     }

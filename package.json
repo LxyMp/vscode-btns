@@ -136,13 +136,9 @@
                 "type": "string",
                 "description": "动作描述"
               },
-              "tooltip": {
-                "type": "string",
-                "description": "鼠标悬浮提示"
-              },
               "icon": {
                 "type": "string",
-                "description": "VS Code Codicon 名称，例如 rocket、globe、terminal"
+                "description": "图标名称，例如 rocket、globe、terminal"
               },
               "action": {
                 "type": "object",
@@ -180,7 +176,7 @@
                     "properties": {
                       "type": {
                         "const": "terminal",
-                        "description": "动作类型"
+                        "description": "动作行为"
                       },
                       "command": {
                         "type": "string",

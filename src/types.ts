@@ -49,7 +49,6 @@ export interface CustomActionItem {
   label: string;
   group?: string;
   description?: string;
-  tooltip?: string;
   icon?: string;
   action: CustomAction;
 }

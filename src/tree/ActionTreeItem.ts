@@ -16,10 +16,7 @@ export class ActionTreeItem extends vscode.TreeItem {
     );
 
     this.description = typeof actionItem.description === 'string' ? actionItem.description : undefined;
-    this.tooltip =
-      (typeof actionItem.tooltip === 'string' && actionItem.tooltip) ||
-      (typeof actionItem.description === 'string' && actionItem.description) ||
-      fallbackLabel;
+    this.tooltip = actionItem.description || fallbackLabel;
     this.contextValue = 'actionItem';
 
     // 设置图标
