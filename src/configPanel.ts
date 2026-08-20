@@ -151,6 +151,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
     .menu button, .icon-menu button, .combo-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 4px 7px; border: 0; background: transparent; color: var(--vscode-menu-foreground, var(--vscode-foreground)); text-align: left; }
     .menu button:hover, .icon-menu button:hover { background: var(--vscode-list-hoverBackground); }
     .icon-preview { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 3px; background: var(--vscode-button-secondaryBackground); }
+    .icon-check { display: inline-flex; align-items: center; justify-content: center; width: 18px; flex: 0 0 18px; color: var(--vscode-testing-iconPassed); font-weight: 700; }
     .menu-select .menu.hidden, .icon-picker .icon-menu.hidden, .combo-menu.hidden { display: none; }
     .checks { display: flex; align-items: center; gap: 18px; min-height: 30px; }
     .checks label { display: inline-flex; align-items: center; gap: 6px; color: var(--vscode-foreground); }
@@ -177,6 +178,12 @@ function getWebviewHtml(webview: vscode.Webview): string {
     const saveButton = document.getElementById('save');
     document.getElementById('add').addEventListener('click', addItem);
     saveButton.addEventListener('click', save);
+    document.addEventListener('pointerdown', (event) => {
+      if (!event.target.closest('.menu-select, .icon-picker, .combo')) closeMenus();
+    });
+    document.addEventListener('focusin', (event) => {
+      if (!event.target.closest('.menu-select, .icon-picker, .combo')) closeMenus();
+    });
 
     window.addEventListener('message', (event) => {
       const message = event.data;
@@ -327,7 +334,8 @@ function getWebviewHtml(webview: vscode.Webview): string {
     function groupOptions(current) { const values = [...new Set(state.items.map((item) => item.group).filter(Boolean))]; if (current && !values.includes(current)) values.unshift(current); return [{ value: '', label: '无分组' }, ...values.map((value) => ({ value, label: value }))]; }
     function comboField(label, name, value, options) { return '<div class="field"><label>' + label + '</label><div class="combo"><input data-field="' + name + '" value="' + escapeAttr(value) + '"><div class="combo-menu hidden">' + options.filter(Boolean).map((option) => '<button type="button" data-value="' + escapeAttr(option) + '">' + escapeHtml(option) + '</button>').join('') + '</div></div></div>'; }
     function menuSelect(label, name, value, options) { return '<div class="field"><label>' + label + '</label><div class="menu-select" data-select="' + name + '"><button type="button">' + escapeHtml(options.find((option) => option.value === value)?.label || value) + '</button><div class="menu hidden">' + options.map((option) => '<button type="button" data-value="' + escapeAttr(option.value) + '">' + escapeHtml(option.label) + '</button>').join('') + '</div></div></div>'; }
-    function iconPicker(value) { const icons = [{ name: '', glyph: '·' }, { name: 'rocket', glyph: '🚀' }, { name: 'globe', glyph: '🌐' }, { name: 'terminal', glyph: '▣' }, { name: 'zap', glyph: 'ϟ' }, { name: 'gear', glyph: '⚙' }, { name: 'play', glyph: '▶' }, { name: 'debug', glyph: '◇' }, { name: 'package', glyph: '□' }, { name: 'book', glyph: '▤' }]; const current = icons.find((icon) => icon.name === value) || { name: value, glyph: '◈' }; return '<div class="field"><label>图标</label><div class="icon-picker" data-select="icon"><button type="button"><span><span class="icon-preview">' + current.glyph + '</span> ' + escapeHtml(current.name || '无图标') + '</span></button><div class="icon-menu hidden">' + icons.map((icon) => '<button type="button" data-value="' + escapeAttr(icon.name) + '"><span class="icon-preview">' + icon.glyph + '</span>' + escapeHtml(icon.name || '无图标') + '</button>').join('') + '</div></div></div>'; }
+    function iconPicker(value) { const icons = [{ name: '', glyph: '·' }, { name: 'rocket', glyph: '🚀' }, { name: 'globe', glyph: '🌐' }, { name: 'terminal', glyph: '▣' }, { name: 'zap', glyph: 'ϟ' }, { name: 'gear', glyph: '⚙' }, { name: 'play', glyph: '▶' }, { name: 'debug', glyph: '◇' }, { name: 'package', glyph: '□' }, { name: 'book', glyph: '▤' }]; const current = icons.find((icon) => icon.name === value) || { name: value, glyph: '◈' }; return '<div class="field"><label>图标</label><div class="icon-picker" data-select="icon"><button type="button"><span><span class="icon-preview">' + current.glyph + '</span> ' + escapeHtml(current.name || '无图标') + '</span></button><div class="icon-menu hidden">' + icons.map((icon) => '<button type="button" data-value="' + escapeAttr(icon.name) + '"><span class="icon-check">' + (icon.name === value ? '✓' : '') + '</span><span class="icon-preview">' + icon.glyph + '</span><span>' + escapeHtml(icon.name || '无图标') + '</span></button>').join('') + '</div></div></div>'; }
+    function closeMenus() { document.querySelectorAll('.menu, .icon-menu, .combo-menu').forEach((menu) => menu.classList.add('hidden')); }
 
     function bindItemEvents() {
       document.querySelectorAll('.action').forEach((element) => {
@@ -340,7 +348,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
         element.querySelectorAll('[data-select]').forEach((select) => {
           const trigger = select.querySelector(':scope > button');
           const menu = select.querySelector(':scope > .menu, :scope > .icon-menu');
-          trigger.addEventListener('click', () => menu.classList.toggle('hidden'));
+          trigger.addEventListener('click', () => { const opening = menu.classList.contains('hidden'); closeMenus(); if (opening) menu.classList.remove('hidden'); });
           menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => {
             const value = option.dataset.value;
             const fieldName = select.dataset.select;
@@ -355,7 +363,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
         element.querySelectorAll('.combo').forEach((combo) => {
           const input = combo.querySelector('input[data-field]');
           const menu = combo.querySelector('.combo-menu');
-          input.addEventListener('focus', () => menu.classList.remove('hidden'));
+          input.addEventListener('focus', () => { closeMenus(); menu.classList.remove('hidden'); });
           input.addEventListener('input', () => {
             menu.classList.remove('hidden');
             menu.querySelectorAll('[data-value]').forEach((option) => {
