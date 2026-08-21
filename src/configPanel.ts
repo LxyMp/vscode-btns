@@ -12,7 +12,6 @@ import { buildCommandQuickPickItems, collectCommandTitles } from './commandMetad
 interface WebviewMessage {
   type?: unknown;
   items?: unknown;
-  index?: unknown;
 }
 
 export class ConfigPanel implements vscode.Disposable {
@@ -66,18 +65,6 @@ export class ConfigPanel implements vscode.Disposable {
       case 'reload':
         await this.sendState(true);
         break;
-      case 'confirmCancel':
-        if (await this.confirm('确定放弃当前未保存的修改吗？')) {
-          await this.panel.webview.postMessage({ type: 'cancelConfirmed' });
-        } else {
-          await this.panel.webview.postMessage({ type: 'cancelRejected' });
-        }
-        break;
-      case 'confirmDelete':
-        if (typeof message.index === 'number' && await this.confirm('确定删除这个动作吗？')) {
-          await this.panel.webview.postMessage({ type: 'deleteConfirmed', index: message.index });
-        }
-        break;
       case 'save':
         await this.save(message.items);
         break;
@@ -123,10 +110,6 @@ export class ConfigPanel implements vscode.Disposable {
     vscode.window.showErrorMessage(message);
   }
 
-  private async confirm(message: string): Promise<boolean> {
-    const choice = await vscode.window.showWarningMessage(message, { modal: true }, '确认');
-    return choice === '确认';
-  }
 }
 
 function getNonce(): string {
@@ -214,6 +197,12 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     .check-box { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid var(--vscode-checkbox-border, var(--vscode-input-border)); border-radius: 3px; background: var(--vscode-checkbox-background, var(--vscode-input-background)); color: transparent; font-size: 13px; font-weight: 700; }
     .check-option input:checked + .check-box { border-color: var(--vscode-checkbox-border, var(--vscode-focusBorder)); background: var(--vscode-checkbox-background, var(--vscode-button-background)); color: var(--vscode-checkbox-foreground, var(--vscode-button-foreground)); }
     .errors { grid-column: 1 / -1; margin: 0; padding: 8px 10px; background: var(--vscode-inputValidation-errorBackground); border: 1px solid var(--vscode-inputValidation-errorBorder); color: var(--vscode-inputValidation-errorForeground); }
+    .confirm-backdrop { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0, 0, 0, .48); }
+    .confirm-dialog { width: min(420px, 100%); padding: 18px; border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border)); border-radius: 6px; background: var(--vscode-editorWidget-background, var(--vscode-editor-background)); color: var(--vscode-editorWidget-foreground, var(--vscode-foreground)); box-shadow: 0 12px 32px rgba(0, 0, 0, .38); }
+    .confirm-title { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+    .confirm-message { margin: 0; color: var(--vscode-descriptionForeground); line-height: 1.6; }
+    .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+    .confirm-danger { background: var(--vscode-inputValidation-errorBorder, #c42b1c); color: var(--vscode-button-foreground); }
     .hidden { display: none !important; }
     @media (max-width: 680px) { .toolbar { flex-wrap: wrap; } .toolbar-title { width: 100%; } .action-body { grid-template-columns: 1fr; } .field.full { grid-column: 1; } }
   </style>
@@ -229,6 +218,16 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     <div id="status" class="status"></div>
     <div id="actions"></div>
   </main>
+  <div id="confirm-backdrop" class="confirm-backdrop hidden" role="presentation">
+    <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <h2 id="confirm-title" class="confirm-title"></h2>
+      <p id="confirm-message" class="confirm-message"></p>
+      <div class="confirm-actions">
+        <button id="confirm-cancel" class="command secondary" type="button">取消</button>
+        <button id="confirm-accept" class="command" type="button">确认</button>
+      </div>
+    </section>
+  </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const state = { items: [], commandItems: [], icons: [], dirty: false, errors: [] };
@@ -236,9 +235,38 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     const statusElement = document.getElementById('status');
     const saveButton = document.getElementById('save');
     const cancelButton = document.getElementById('cancel');
+    const confirmBackdrop = document.getElementById('confirm-backdrop');
+    const confirmTitle = document.getElementById('confirm-title');
+    const confirmMessage = document.getElementById('confirm-message');
+    const confirmCancelButton = document.getElementById('confirm-cancel');
+    const confirmAcceptButton = document.getElementById('confirm-accept');
+    let pendingConfirmation = null;
+    let confirmationTrigger = null;
     document.getElementById('add').addEventListener('click', addItem);
     saveButton.addEventListener('click', save);
     cancelButton.addEventListener('click', cancel);
+    confirmCancelButton.addEventListener('click', closeConfirm);
+    confirmAcceptButton.addEventListener('click', confirmPendingAction);
+    confirmBackdrop.addEventListener('pointerdown', (event) => {
+      if (event.target === confirmBackdrop) closeConfirm();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (!pendingConfirmation) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeConfirm();
+      } else if (event.key === 'Tab') {
+        const first = confirmCancelButton;
+        const last = confirmAcceptButton;
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    });
     document.addEventListener('pointerdown', (event) => {
       if (!event.target.closest('.menu-select, .icon-picker, .combo')) closeMenus();
     });
@@ -273,14 +301,6 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         render();
         renderToolbar();
         setStatus('已保存');
-      } else if (message.type === 'cancelConfirmed') {
-        vscode.postMessage({ type: 'reload' });
-      } else if (message.type === 'cancelRejected') {
-        renderToolbar();
-      } else if (message.type === 'deleteConfirmed' && Number.isInteger(message.index)) {
-        state.items.splice(message.index, 1);
-        markDirty();
-        render();
       } else if (message.type === 'saveError') {
         setStatus(message.message, true);
       }
@@ -331,8 +351,39 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
 
     function cancel() {
       if (!state.dirty) return;
-      cancelButton.disabled = true;
-      vscode.postMessage({ type: 'confirmCancel' });
+      showConfirm('放弃修改', '确定放弃当前所有未保存的修改吗？', '放弃修改', () => {
+        vscode.postMessage({ type: 'reload' });
+      });
+    }
+
+    function showConfirm(title, message, confirmLabel, onConfirm, danger = false) {
+      if (pendingConfirmation) return;
+      pendingConfirmation = onConfirm;
+      confirmationTrigger = document.activeElement;
+      confirmTitle.textContent = title;
+      confirmMessage.textContent = message;
+      confirmAcceptButton.textContent = confirmLabel;
+      confirmAcceptButton.classList.toggle('confirm-danger', danger);
+      confirmBackdrop.classList.remove('hidden');
+      confirmCancelButton.focus();
+    }
+
+    function closeConfirm() {
+      if (!pendingConfirmation) return;
+      pendingConfirmation = null;
+      confirmBackdrop.classList.add('hidden');
+      const trigger = confirmationTrigger;
+      confirmationTrigger = null;
+      if (trigger && document.contains(trigger)) trigger.focus();
+    }
+
+    function confirmPendingAction() {
+      const action = pendingConfirmation;
+      if (!action) return;
+      pendingConfirmation = null;
+      confirmationTrigger = null;
+      confirmBackdrop.classList.add('hidden');
+      action();
     }
 
     function serializeItems() {
@@ -479,7 +530,12 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
 
     function applyAction(index, action) {
       if (action === 'delete') {
-        vscode.postMessage({ type: 'confirmDelete', index });
+        const itemName = state.items[index].label || state.items[index].id || '未命名动作';
+        showConfirm('删除动作', '确定删除“' + itemName + '”吗？此修改将在保存后生效。', '删除', () => {
+          state.items.splice(index, 1);
+          markDirty();
+          render();
+        }, true);
         return;
       } else if (action === 'up' && index > 0) {
         [state.items[index - 1], state.items[index]] = [state.items[index], state.items[index - 1]];
