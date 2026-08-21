@@ -159,11 +159,23 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     .command { min-height: 30px; padding: 0 12px; border: 1px solid var(--vscode-button-border, transparent); border-radius: 4px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
     .command.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
     .icon-button { width: 30px; height: 30px; padding: 0; border: 1px solid var(--vscode-button-border, var(--vscode-panel-border)); border-radius: 4px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); font-size: 16px; }
-    main { width: min(980px, 100%); margin: 0 auto; padding: 16px 16px 80px; }
+    main { width: min(1240px, 100%); margin: 0 auto; padding: 16px 16px 80px; }
     .status { min-height: 28px; margin-bottom: 8px; color: var(--vscode-descriptionForeground); }
     .status.error { color: var(--vscode-errorForeground); }
+    .editor-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); align-items: start; gap: 16px; }
+    .action-navigation { position: sticky; top: 68px; max-height: calc(100vh - 84px); overflow: hidden; border: 1px solid var(--vscode-panel-border); border-radius: 6px; background: var(--vscode-sideBar-background); }
+    .action-navigation-title { padding: 10px 12px; border-bottom: 1px solid var(--vscode-panel-border); font-size: 12px; font-weight: 600; color: var(--vscode-descriptionForeground); }
+    .action-navigation-list { max-height: calc(100vh - 124px); overflow: auto; padding: 4px; }
+    .action-navigation-list button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 5px 8px; border: 0; border-radius: 3px; background: transparent; color: var(--vscode-foreground); text-align: left; }
+    .action-navigation-list button:hover { background: var(--vscode-list-hoverBackground); }
+    .action-navigation-list button.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+    .navigation-index { width: 24px; flex: 0 0 24px; color: var(--vscode-descriptionForeground); font-variant-numeric: tabular-nums; }
+    .action-navigation-list button.active .navigation-index { color: inherit; opacity: .75; }
+    .navigation-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #actions { min-width: 0; }
+    .action-navigation.hidden + #actions { grid-column: 1 / -1; }
     .empty { padding: 48px 16px; text-align: center; border: 1px dashed var(--vscode-panel-border); color: var(--vscode-descriptionForeground); }
-    .action { margin-bottom: 12px; border: 1px solid var(--vscode-panel-border); border-radius: 6px; background: var(--vscode-sideBar-background); }
+    .action { scroll-margin-top: 68px; margin-bottom: 12px; border: 1px solid var(--vscode-panel-border); border-radius: 6px; background: var(--vscode-sideBar-background); }
     .action.invalid { border-color: var(--vscode-inputValidation-errorBorder); }
     .action.dirty-item { border-color: var(--vscode-testing-iconFailed, #f14c4c); }
     .action-header { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 10px; border-bottom: 1px solid var(--vscode-panel-border); }
@@ -204,7 +216,8 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
     .confirm-danger { background: var(--vscode-inputValidation-errorBorder, #c42b1c); color: var(--vscode-button-foreground); }
     .hidden { display: none !important; }
-    @media (max-width: 680px) { .toolbar { flex-wrap: wrap; } .toolbar-title { width: 100%; } .action-body { grid-template-columns: 1fr; } .field.full { grid-column: 1; } }
+    @media (max-width: 800px) { .editor-layout { grid-template-columns: 1fr; } .action-navigation { position: sticky; top: 53px; z-index: 8; max-height: none; } .action-navigation-title { display: none; } .action-navigation-list { display: flex; max-height: none; overflow-x: auto; padding: 4px; } .action-navigation-list button { width: auto; max-width: 200px; flex: 0 0 auto; } .action { scroll-margin-top: 105px; } }
+    @media (max-width: 680px) { .toolbar { flex-wrap: wrap; } .toolbar-title { width: 100%; } .action-navigation { top: 89px; } .action { scroll-margin-top: 141px; } .action-body { grid-template-columns: 1fr; } .field.full { grid-column: 1; } }
   </style>
 </head>
 <body>
@@ -216,7 +229,13 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
   </header>
   <main>
     <div id="status" class="status"></div>
-    <div id="actions"></div>
+    <div class="editor-layout">
+      <nav id="action-navigation" class="action-navigation hidden" aria-label="配置项列表">
+        <div class="action-navigation-title">配置项列表</div>
+        <div id="action-navigation-list" class="action-navigation-list"></div>
+      </nav>
+      <div id="actions"></div>
+    </div>
   </main>
   <div id="confirm-backdrop" class="confirm-backdrop hidden" role="presentation">
     <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
@@ -232,6 +251,8 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     const vscode = acquireVsCodeApi();
     const state = { items: [], commandItems: [], icons: [], dirty: false, errors: [] };
     const actionsElement = document.getElementById('actions');
+    const actionNavigation = document.getElementById('action-navigation');
+    const actionNavigationList = document.getElementById('action-navigation-list');
     const statusElement = document.getElementById('status');
     const saveButton = document.getElementById('save');
     const cancelButton = document.getElementById('cancel');
@@ -242,6 +263,8 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     const confirmAcceptButton = document.getElementById('confirm-accept');
     let pendingConfirmation = null;
     let confirmationTrigger = null;
+    let activeActionIndex = 0;
+    let scrollFrame = 0;
     document.getElementById('add').addEventListener('click', addItem);
     saveButton.addEventListener('click', save);
     cancelButton.addEventListener('click', cancel);
@@ -273,6 +296,13 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     document.addEventListener('focusin', (event) => {
       if (!event.target.closest('.menu-select, .icon-picker, .combo')) closeMenus();
     });
+    window.addEventListener('scroll', () => {
+      if (scrollFrame) return;
+      scrollFrame = requestAnimationFrame(() => {
+        scrollFrame = 0;
+        updateActiveActionFromScroll();
+      });
+    }, { passive: true });
 
     window.addEventListener('message', (event) => {
       const message = event.data;
@@ -416,12 +446,65 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
 
     function render() {
       renderToolbar();
+      renderActionNavigation();
       if (!state.items.length) {
         actionsElement.innerHTML = '<div class="empty">当前没有快捷动作</div>';
         return;
       }
       actionsElement.innerHTML = state.items.map(renderItem).join('');
       bindItemEvents();
+    }
+
+    function renderActionNavigation() {
+      actionNavigation.classList.toggle('hidden', !state.items.length);
+      if (!state.items.length) {
+        actionNavigationList.innerHTML = '';
+        activeActionIndex = 0;
+        return;
+      }
+      activeActionIndex = Math.min(activeActionIndex, state.items.length - 1);
+      actionNavigationList.innerHTML = state.items.map((item, index) => '<button type="button" data-navigation-index="' + index + '" class="' + (index === activeActionIndex ? 'active' : '') + '" title="' + escapeAttr(item.label || item.id || '未命名动作') + '"><span class="navigation-index">' + (index + 1) + '</span><span class="navigation-label">' + escapeHtml(item.label || item.id || '未命名动作') + '</span></button>').join('');
+      actionNavigationList.querySelectorAll('[data-navigation-index]').forEach((button) => button.addEventListener('click', () => scrollToAction(Number(button.dataset.navigationIndex))));
+    }
+
+    function scrollToAction(index) {
+      const action = document.querySelector('.action[data-index="' + index + '"]');
+      if (!action) return;
+      activeActionIndex = index;
+      updateActiveNavigation();
+      action.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+
+    function updateActiveActionFromScroll() {
+      const actions = [...document.querySelectorAll('.action')];
+      if (!actions.length) return;
+      const topOffset = window.innerWidth <= 680 ? 142 : window.innerWidth <= 800 ? 106 : 69;
+      let closestIndex = Number(actions[0].dataset.index);
+      let closestDistance = Infinity;
+      actions.forEach((action) => {
+        const distance = Math.abs(action.getBoundingClientRect().top - topOffset);
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestIndex = Number(action.dataset.index);
+        }
+      });
+      if (closestIndex !== activeActionIndex) {
+        activeActionIndex = closestIndex;
+        updateActiveNavigation();
+      }
+    }
+
+    function updateActiveNavigation() {
+      actionNavigationList.querySelectorAll('[data-navigation-index]').forEach((button) => button.classList.toggle('active', Number(button.dataset.navigationIndex) === activeActionIndex));
+      const activeItem = actionNavigationList.querySelector('[data-navigation-index="' + activeActionIndex + '"]');
+      if (!activeItem) return;
+      if (window.innerWidth <= 800) {
+        if (activeItem.offsetLeft < actionNavigationList.scrollLeft) actionNavigationList.scrollLeft = activeItem.offsetLeft;
+        else if (activeItem.offsetLeft + activeItem.offsetWidth > actionNavigationList.scrollLeft + actionNavigationList.clientWidth) actionNavigationList.scrollLeft = activeItem.offsetLeft + activeItem.offsetWidth - actionNavigationList.clientWidth;
+      } else {
+        if (activeItem.offsetTop < actionNavigationList.scrollTop) actionNavigationList.scrollTop = activeItem.offsetTop;
+        else if (activeItem.offsetTop + activeItem.offsetHeight > actionNavigationList.scrollTop + actionNavigationList.clientHeight) actionNavigationList.scrollTop = activeItem.offsetTop + activeItem.offsetHeight - actionNavigationList.clientHeight;
+      }
     }
 
     function renderToolbar() {
@@ -524,7 +607,19 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         state.items[index].id = value;
         input.closest('.action').querySelector('[data-field="id"]').value = state.items[index].id;
       }
-      if (input.dataset.field === 'label') input.closest('.action').querySelector('.action-name').textContent = value || state.items[index].id || '未命名动作';
+      if (input.dataset.field === 'label') {
+        const title = value || state.items[index].id || '未命名动作';
+        input.closest('.action').querySelector('.action-name').textContent = title;
+        const navigationItem = actionNavigationList.querySelector('[data-navigation-index="' + index + '"]');
+        navigationItem.querySelector('.navigation-label').textContent = title;
+        navigationItem.title = title;
+      } else if (input.dataset.field === 'id' && !state.items[index].label) {
+        const title = value || '未命名动作';
+        input.closest('.action').querySelector('.action-name').textContent = title;
+        const navigationItem = actionNavigationList.querySelector('[data-navigation-index="' + index + '"]');
+        navigationItem.querySelector('.navigation-label').textContent = title;
+        navigationItem.title = title;
+      }
       if (input.dataset.field === 'action.type') render();
     }
 
