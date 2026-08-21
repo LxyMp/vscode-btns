@@ -1,6 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <!-- 圆角方形背景 -->
-  <rect x="3" y="3" width="26" height="26" rx="5" ry="5" fill="#007ACC" stroke="#007ACC" stroke-width="1"/>
-  <!-- 闪电图标，表示快捷动作 -->
-  <path d="M18 5L10 17h5l-1 9 8-11h-5l1-10z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="0.5" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <path
+    fill="#C5C5C5"
+    fill-rule="evenodd"
+    d="M13.65 1.55a.75.75 0 0 1 .78.13.75.75 0 0 1 .23.76l-1.2 5.06H18a.75.75 0 0 1 .6 1.2l-8.25 11a.75.75 0 0 1-1.36-.59l1.2-5.61H6a.75.75 0 0 1-.62-1.17l7.96-10.5a.75.75 0 0 1 .31-.28ZM7.51 12h3.6a.75.75 0 0 1 .73.91l-.72 3.38L16.5 9h-3.99a.75.75 0 0 1-.73-.92l.65-2.73L7.51 12Z"
+  />
+  <path
+    fill="#C5C5C5"
+    d="M19.25 2.5a2.25 2.25 0 1 1 0 4.5 2.25 2.25 0 0 1 0-4.5Zm0 1.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 13a2.25 2.25 0 1 1 0 4.5 2.25 2.25 0 0 1 0-4.5Zm0 1.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z"
+  />
 </svg>
