@@ -12,6 +12,7 @@ import { buildCommandQuickPickItems, collectCommandTitles } from './commandMetad
 interface WebviewMessage {
   type?: unknown;
   items?: unknown;
+  dirty?: unknown;
 }
 
 export class ConfigPanel implements vscode.Disposable {
@@ -20,7 +21,7 @@ export class ConfigPanel implements vscode.Disposable {
   static show(context: vscode.ExtensionContext): void {
     if (ConfigPanel.current) {
       ConfigPanel.current.panel.reveal(vscode.ViewColumn.One);
-      ConfigPanel.current.sendState();
+      if (!ConfigPanel.current.isDirty) void ConfigPanel.current.sendState();
       return;
     }
 
@@ -34,6 +35,8 @@ export class ConfigPanel implements vscode.Disposable {
   }
 
   private readonly disposables: vscode.Disposable[] = [];
+  private isDirty = false;
+  private isSaving = false;
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
@@ -44,6 +47,14 @@ export class ConfigPanel implements vscode.Disposable {
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
       this.panel.webview.onDidReceiveMessage((message: WebviewMessage) => this.handleMessage(message)),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (!event.affectsConfiguration('customActions.items') || this.isSaving) return;
+        if (this.isDirty) {
+          void this.panel.webview.postMessage({ type: 'externalChange' });
+        } else {
+          void this.sendState();
+        }
+      }),
     );
   }
 
@@ -60,10 +71,15 @@ export class ConfigPanel implements vscode.Disposable {
   private async handleMessage(message: WebviewMessage): Promise<void> {
     switch (message.type) {
       case 'ready':
+        this.isDirty = false;
         await this.sendState();
         break;
       case 'reload':
+        this.isDirty = false;
         await this.sendState(true);
+        break;
+      case 'dirtyState':
+        if (typeof message.dirty === 'boolean') this.isDirty = message.dirty;
         break;
       case 'save':
         await this.save(message.items);
@@ -96,12 +112,16 @@ export class ConfigPanel implements vscode.Disposable {
     }
 
     try {
+      this.isSaving = true;
       await updateConfiguredItemsForEditor(items as CustomActionItem[]);
+      this.isDirty = false;
       await this.panel.webview.postMessage({ type: 'saved' });
       vscode.window.showInformationMessage('快捷动作配置已保存');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       await this.postSaveError(`保存失败：${message}`);
+    } finally {
+      this.isSaving = false;
     }
   }
 
@@ -251,7 +271,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
-    const state = { items: [], commandItems: [], icons: [], dirty: false, errors: [] };
+    const state = { items: [], commandItems: [], icons: [], dirty: false, externalChanged: false, errors: [] };
     const actionsElement = document.getElementById('actions');
     const actionNavigation = document.getElementById('action-navigation');
     const actionNavigationList = document.getElementById('action-navigation-list');
@@ -313,6 +333,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         state.icons = Array.isArray(message.icons) ? message.icons : [];
         state.items = normalizeItems(message.items);
         state.dirty = false;
+        state.externalChanged = false;
         state.errors = [];
         render();
         setStatus(message.rootError || '');
@@ -329,12 +350,17 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
       } else if (message.type === 'saved') {
         state.items.forEach((item) => { item.isNew = false; item.isDirty = false; });
         state.dirty = false;
+        state.externalChanged = false;
         state.errors = [];
+        vscode.postMessage({ type: 'dirtyState', dirty: false });
         render();
         renderToolbar();
         setStatus('已保存');
       } else if (message.type === 'saveError') {
         setStatus(message.message, true);
+      } else if (message.type === 'externalChange') {
+        state.externalChanged = true;
+        setStatus('配置已在外部更改，保存当前修改将覆盖外部更改', true);
       }
     });
 
@@ -369,6 +395,14 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     }
 
     function save() {
+      if (state.externalChanged) {
+        showConfirm('配置已在外部更改', '保存将覆盖外部更改，是否继续？', '覆盖并保存', performSave);
+        return;
+      }
+      performSave();
+    }
+
+    function performSave() {
       const result = serializeItems();
       if (result.errors.length) {
         state.errors = result.errors;
@@ -655,7 +689,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     }
 
     function markItemDirty(index) { state.items[index].isDirty = true; markDirty(); }
-    function markDirty() { state.dirty = true; renderToolbar(); setStatus('有未保存的修改'); }
+    function markDirty() { state.dirty = true; vscode.postMessage({ type: 'dirtyState', dirty: true }); renderToolbar(); setStatus(state.externalChanged ? '配置已在外部更改，保存当前修改将覆盖外部更改' : '有未保存的修改', state.externalChanged); }
     function setStatus(message, isError) { statusElement.textContent = message; statusElement.classList.toggle('error', Boolean(isError)); saveButton.disabled = !state.dirty; cancelButton.disabled = !state.dirty; }
     function escapeHtml(value) { return String(value).replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character]); }
     function escapeAttr(value) { return escapeHtml(value).replace(/"/g, '&quot;'); }
