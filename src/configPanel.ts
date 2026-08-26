@@ -191,6 +191,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     .menu-select > button, .icon-picker > button { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
     .menu-select > button::after, .icon-picker > button::after, .combo::after { content: '⌄'; color: var(--vscode-descriptionForeground); position: absolute; right: 8px; top: 6px; pointer-events: none; }
     .menu, .icon-menu, .combo-menu { position: absolute; left: 0; right: 0; z-index: 20; max-height: 220px; overflow: auto; margin-top: 3px; padding: 4px; border: 1px solid var(--vscode-focusBorder); border-radius: 4px; background: var(--vscode-menu-background, var(--vscode-editor-background)); box-shadow: 0 6px 18px rgba(0,0,0,.28); }
+    .menu.drop-up, .icon-menu.drop-up, .combo-menu.drop-up { top: auto; bottom: calc(100% + 3px); margin-top: 0; margin-bottom: 3px; }
     .icon-menu { max-height: none; overflow: hidden; padding: 4px; }
     .icon-options { max-height: 180px; overflow-y: auto; }
     .menu button, .icon-menu button, .combo-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 4px 7px; border: 0; background: transparent; color: var(--vscode-menu-foreground, var(--vscode-foreground)); text-align: left; }
@@ -546,7 +547,14 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     function menuSelect(label, name, value, options) { return '<div class="field"><label>' + label + '</label><div class="menu-select" data-select="' + name + '"><button type="button">' + escapeHtml(options.find((option) => option.value === value)?.label || value) + '</button><div class="menu hidden">' + options.map((option) => '<button type="button" data-value="' + escapeAttr(option.value) + '">' + escapeHtml(option.label) + '</button>').join('') + '</div></div></div>'; }
     function iconPicker(value) { const current = state.icons.find((icon) => icon.name === value) || { name: value, character: value ? '◇' : '·' }; return '<div class="field"><label>图标</label><div class="icon-picker" data-select="icon"><button type="button"><span><span class="icon-preview codicon">' + current.character + '</span> ' + escapeHtml(current.name || '无图标') + '</span></button><div class="icon-menu hidden"></div></div></div>'; }
     function populateIconMenu(menu, currentValue, index) { const icons = [{ name: '', character: '·' }, ...state.icons]; menu.innerHTML = '<input class="icon-search" placeholder="搜索图标..."><div class="icon-options">' + icons.map((icon) => '<button type="button" data-value="' + escapeAttr(icon.name) + '"><span class="icon-check">' + (icon.name === currentValue ? '✓' : '') + '</span><span class="icon-preview codicon">' + icon.character + '</span><span>' + escapeHtml(icon.name || '无图标') + '</span></button>').join('') + '</div>'; const search = menu.querySelector('.icon-search'); search.addEventListener('input', () => menu.querySelectorAll('[data-value]').forEach((option) => option.classList.toggle('hidden', !option.dataset.value.includes(search.value.toLowerCase())))); menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => { state.items[index].icon = option.dataset.value; markItemDirty(index); state.errors = []; render(); })); }
-    function closeMenus() { document.querySelectorAll('.menu, .icon-menu, .combo-menu').forEach((menu) => menu.classList.add('hidden')); }
+    function closeMenus() { document.querySelectorAll('.menu, .icon-menu, .combo-menu').forEach((menu) => { menu.classList.add('hidden'); menu.classList.remove('drop-up'); }); }
+    function positionMenu(anchor, menu) {
+      const anchorRect = anchor.getBoundingClientRect();
+      const menuHeight = Math.min(menu.scrollHeight, 220) + 8;
+      const spaceBelow = window.innerHeight - anchorRect.bottom;
+      const spaceAbove = anchorRect.top;
+      menu.classList.toggle('drop-up', spaceBelow < menuHeight && spaceAbove > spaceBelow);
+    }
 
     function bindItemEvents() {
       document.querySelectorAll('.action').forEach((element) => {
@@ -559,7 +567,7 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         element.querySelectorAll('[data-select]').forEach((select) => {
           const trigger = select.querySelector(':scope > button');
           const menu = select.querySelector(':scope > .menu, :scope > .icon-menu');
-          trigger.addEventListener('click', () => { const opening = menu.classList.contains('hidden'); closeMenus(); if (opening) { if (select.dataset.select === 'icon' && !menu.childElementCount) populateIconMenu(menu, state.items[index].icon, index); menu.classList.remove('hidden'); } });
+          trigger.addEventListener('click', () => { const opening = menu.classList.contains('hidden'); closeMenus(); if (opening) { if (select.dataset.select === 'icon' && !menu.childElementCount) populateIconMenu(menu, state.items[index].icon, index); menu.classList.remove('hidden'); positionMenu(select, menu); } });
           menu.querySelectorAll('[data-value]').forEach((option) => option.addEventListener('click', () => {
             const value = option.dataset.value;
             const fieldName = select.dataset.select;
@@ -577,10 +585,11 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
         element.querySelectorAll('.combo').forEach((combo) => {
           const input = combo.querySelector('input[data-field]');
           const menu = combo.querySelector('.combo-menu');
-          input.addEventListener('focus', () => { closeMenus(); if (combo.classList.contains('command-combo') && !menu.childElementCount) populateCommandMenu(menu, input.value, input); menu.classList.remove('hidden'); });
+          input.addEventListener('focus', () => { closeMenus(); if (combo.classList.contains('command-combo') && !menu.childElementCount) populateCommandMenu(menu, input.value, input); menu.classList.remove('hidden'); positionMenu(combo, menu); });
           input.addEventListener('input', () => {
             if (combo.classList.contains('command-combo') && !menu.childElementCount) populateCommandMenu(menu, input.value, input);
             menu.classList.remove('hidden');
+            positionMenu(combo, menu);
             menu.querySelectorAll('[data-value]').forEach((option) => {
               const searchable = (option.dataset.search || option.dataset.value).toLowerCase();
               option.classList.toggle('hidden', !searchable.includes(input.value.toLowerCase()));
