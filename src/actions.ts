@@ -42,7 +42,9 @@ function getOrCreateTerminal(action: TerminalAction): vscode.Terminal {
   // 监听终端关闭事件，清理缓存
   const disposable = vscode.window.onDidCloseTerminal((closedTerminal) => {
     if (closedTerminal === terminal) {
-      terminalMap.delete(cacheKey);
+      if (terminalMap.get(cacheKey) === terminal) {
+        terminalMap.delete(cacheKey);
+      }
       disposable.dispose();
       // 从全局监听列表中移除
       const idx = terminalCloseListeners.indexOf(disposable);
