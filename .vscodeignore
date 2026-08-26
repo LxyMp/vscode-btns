@@ -2,6 +2,7 @@
 .vscode-test/**
 dist/**
 node_modules/**
+AGENT.md
 src/**
 **/*.ts
 **/*.map
@@ -9,4 +10,5 @@ src/**
 tsconfig.json
 tsconfig*.json
 tests/**
+yarn.lock
 .eslintrc.json
