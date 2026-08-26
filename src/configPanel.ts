@@ -190,12 +190,13 @@ function getWebviewHtml(webview: vscode.Webview, extensionUri: vscode.Uri): stri
     .menu-select, .icon-picker, .combo { position: relative; }
     .menu-select > button, .icon-picker > button { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
     .menu-select > button::after, .icon-picker > button::after, .combo::after { content: '⌄'; color: var(--vscode-descriptionForeground); position: absolute; right: 8px; top: 6px; pointer-events: none; }
-    .menu, .icon-menu, .combo-menu { position: absolute; left: 0; right: 0; z-index: 20; max-height: 220px; overflow: auto; margin-top: 3px; padding: 4px; border: 1px solid var(--vscode-focusBorder); border-radius: 4px; background: var(--vscode-menu-background, var(--vscode-editor-background)); box-shadow: 0 6px 18px rgba(0,0,0,.28); }
+    .menu, .icon-menu, .combo-menu { position: absolute; left: 0; right: 0; z-index: 20; max-width: 100%; max-height: 220px; overflow-x: hidden; overflow-y: auto; margin-top: 3px; padding: 4px; border: 1px solid var(--vscode-focusBorder); border-radius: 4px; background: var(--vscode-menu-background, var(--vscode-editor-background)); box-shadow: 0 6px 18px rgba(0,0,0,.28); }
     .menu.drop-up, .icon-menu.drop-up, .combo-menu.drop-up { top: auto; bottom: calc(100% + 3px); margin-top: 0; margin-bottom: 3px; }
     .icon-menu { max-height: none; overflow: hidden; padding: 4px; }
     .icon-options { max-height: 180px; overflow-y: auto; }
-    .menu button, .icon-menu button, .combo-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 28px; padding: 4px 7px; border: 0; background: transparent; color: var(--vscode-menu-foreground, var(--vscode-foreground)); text-align: left; }
-    .command-option { flex-direction: column; align-items: flex-start !important; gap: 2px !important; }
+    .menu button, .icon-menu button, .combo-menu button { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; min-height: 28px; padding: 4px 7px; border: 0; background: transparent; color: var(--vscode-menu-foreground, var(--vscode-foreground)); text-align: left; }
+    .command-option { flex-direction: column; align-items: stretch !important; gap: 2px !important; }
+    .command-label, .command-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .command-label { font-size: 13px; }
     .command-detail { color: var(--vscode-descriptionForeground); font-size: 12px; }
     .menu button:hover, .icon-menu button:hover { background: var(--vscode-list-hoverBackground); }

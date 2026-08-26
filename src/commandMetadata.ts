@@ -15,13 +15,15 @@ interface CommandContribution {
 
 function getLocalizedText(value: unknown): string | undefined {
   if (typeof value === 'string' && value.trim()) {
-    return value;
+    return value.startsWith('%') && value.endsWith('%') ? undefined : value;
   }
   if (value !== null && typeof value === 'object') {
     const localizedValue = (value as { value?: unknown }).value;
     if (typeof localizedValue === 'string' && localizedValue.trim()) {
-      return localizedValue;
+      if (!(localizedValue.startsWith('%') && localizedValue.endsWith('%'))) return localizedValue;
     }
+    const original = (value as { original?: unknown }).original;
+    if (typeof original === 'string' && original.trim()) return original;
   }
   return undefined;
 }

@@ -29,6 +29,14 @@ test('ignores malformed command contributions', () => {
   assert.equal(titles.size, 0);
 });
 
+test('uses original text when a localized title is a localization key', () => {
+  const titles = collectCommandTitles([
+    { packageJSON: { contributes: { commands: [{ command: 'extension.reload', title: { value: '%command.reload%', original: 'Reload Window' } }] } } },
+  ]);
+
+  assert.equal(titles.get('extension.reload'), 'Reload Window');
+});
+
 test('uses the command ID when a localized title is unavailable', () => {
   const items = buildCommandQuickPickItems(
     ['extension.unknown', 'extension.known'],
