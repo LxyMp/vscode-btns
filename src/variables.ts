@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
-import { resolveObjectVariables, resolveVariablesWithContext, VariableContext } from './variableResolver';
+import {
+  containsVariable,
+  resolveObjectVariables,
+  resolveVariablesWithContext,
+  VariableContext,
+} from './variableResolver';
 
 /**
  * 替换字符串中的变量
@@ -32,9 +37,13 @@ export function resolveVariables(input: string): string {
  * 对动作对象中的所有字符串字段进行变量替换
  */
 export function resolveActionVariables<T>(obj: T): T {
+  const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (!workspaceFolder && containsVariable(obj, '${workspaceFolder}')) {
+    vscode.window.showWarningMessage('当前没有打开工作区，无法解析 ${workspaceFolder}');
+  }
   const editor = vscode.window.activeTextEditor;
   const context: VariableContext = {
-    workspaceFolder: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+    workspaceFolder,
     file: editor?.document.uri.fsPath,
     selectedText: editor?.document.getText(editor.selection),
     env: process.env,

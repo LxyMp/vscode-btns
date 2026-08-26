@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { resolveObjectVariables, resolveVariablesWithContext } from '../src/variableResolver';
+import {
+  containsVariable,
+  resolveObjectVariables,
+  resolveVariablesWithContext,
+} from '../src/variableResolver';
 
 const context = {
   workspaceFolder: '/workspace/project',
@@ -35,4 +39,15 @@ test('recursively resolves strings without mutating the source object', () => {
     enabled: true,
   });
   assert.equal(source.command, 'node ${file}');
+});
+
+test('detects variables in nested action fields', () => {
+  assert.equal(
+    containsVariable(
+      { type: 'terminal', command: 'yarn dev', cwd: '${workspaceFolder}/app' },
+      '${workspaceFolder}',
+    ),
+    true,
+  );
+  assert.equal(containsVariable({ command: 'yarn dev' }, '${workspaceFolder}'), false);
 });

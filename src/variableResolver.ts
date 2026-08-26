@@ -7,6 +7,19 @@ export interface VariableContext {
   env?: NodeJS.ProcessEnv;
 }
 
+export function containsVariable(value: unknown, variable: string): boolean {
+  if (typeof value === 'string') {
+    return value.includes(variable);
+  }
+  if (Array.isArray(value)) {
+    return value.some((item) => containsVariable(item, variable));
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.values(value).some((item) => containsVariable(item, variable));
+  }
+  return false;
+}
+
 export function resolveVariablesWithContext(input: string, context: VariableContext): string {
   if (!input) {
     return input;
