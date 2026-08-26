@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ActionTreeItem } from './ActionTreeItem';
-import { getConfiguredItems, validateAllItems } from '../config';
+import { getConfiguredItems, getRawConfiguredItems, validateAllItems } from '../config';
 import { CustomActionItem } from '../types';
 
 /**
@@ -71,10 +71,21 @@ export class ActionTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
     result.push(searchItem);
 
     const items = getConfiguredItems();
+    const rawItems = getRawConfiguredItems();
 
-    if (items.length === 0) {
+    if (Array.isArray(rawItems) && rawItems.length === 0) {
       result.push(...this.getEmptyPlaceholder());
       return result;
+    }
+
+    if (!Array.isArray(rawItems)) {
+      result.push(this.getInvalidPlaceholder('customActions.items 必须是数组'));
+      return result;
+    }
+
+    const invalidItemCount = rawItems.length - items.length;
+    for (let index = 0; index < invalidItemCount; index += 1) {
+      result.push(this.getInvalidPlaceholder('动作项必须是对象'));
     }
 
     const groups = new Map<string, CustomActionItem[]>();
@@ -130,6 +141,15 @@ export class ActionTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
     placeholderItem.contextValue = 'placeholder';
 
     return [placeholderItem];
+  }
+
+  private getInvalidPlaceholder(message: string): vscode.TreeItem {
+    const item = new vscode.TreeItem('无效动作配置', vscode.TreeItemCollapsibleState.None);
+    item.iconPath = new vscode.ThemeIcon('warning');
+    item.description = message;
+    item.tooltip = message;
+    item.contextValue = 'invalidAction';
+    return item;
   }
 }
 

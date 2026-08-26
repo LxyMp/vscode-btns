@@ -8,7 +8,12 @@ export { validateAllItems, validateItem } from './validation';
 export function getConfiguredItems(): CustomActionItem[] {
   const config = vscode.workspace.getConfiguration('customActions');
   const items = config.get<unknown>('items', []);
-  return Array.isArray(items) ? (items as CustomActionItem[]) : [];
+  return Array.isArray(items)
+    ? items.filter(
+        (item): item is CustomActionItem =>
+          item !== null && typeof item === 'object' && !Array.isArray(item),
+      )
+    : [];
 }
 
 export function getRawConfiguredItems(): unknown {
