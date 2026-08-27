@@ -1,7 +1,7 @@
 {
   "name": "custom-actions-panel",
   "displayName": "Custom Actions Panel",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "配置驱动的快捷动作面板，支持执行 VS Code 命令、终端命令和打开 URL",
   "keywords": [
     "actions",
