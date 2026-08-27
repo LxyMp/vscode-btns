@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="background" x1="96" y1="64" x2="928" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#087EA4"/>
+      <stop offset="0.52" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#6D28D9"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="208" y1="186" x2="816" y2="846" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#172554" stop-opacity="0.96"/>
+      <stop offset="1" stop-color="#111827" stop-opacity="0.96"/>
+    </linearGradient>
+    <linearGradient id="bolt" x1="400" y1="344" x2="616" y2="698" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DDF4FF"/>
+    </linearGradient>
+    <filter id="shadow" x="80" y="100" width="864" height="830" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="32" stdDeviation="34" flood-color="#08122E" flood-opacity="0.35"/>
+    </filter>
+    <filter id="glow" x="300" y="260" width="430" height="520" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="10" stdDeviation="18" flood-color="#38BDF8" flood-opacity="0.35"/>
+    </filter>
+    <clipPath id="canvas">
+      <rect width="1024" height="1024" rx="220"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#canvas)">
+    <rect width="1024" height="1024" fill="url(#background)"/>
+    <circle cx="846" cy="154" r="270" fill="#67E8F9" opacity="0.12"/>
+    <circle cx="148" cy="910" r="300" fill="#C084FC" opacity="0.13"/>
+
+    <g filter="url(#shadow)">
+      <rect x="142" y="150" width="740" height="724" rx="116" fill="url(#panel)"/>
+      <rect x="151" y="159" width="722" height="706" rx="107" fill="none" stroke="#FFFFFF" stroke-opacity="0.16" stroke-width="18"/>
+    </g>
+
+    <circle cx="240" cy="254" r="23" fill="#FB7185"/>
+    <circle cx="314" cy="254" r="23" fill="#FBBF24"/>
+    <circle cx="388" cy="254" r="23" fill="#34D399"/>
+    <rect x="442" y="232" width="310" height="44" rx="22" fill="#FFFFFF" opacity="0.18"/>
+
+    <rect x="216" y="358" width="164" height="142" rx="40" fill="#06B6D4"/>
+    <path d="M267 407L310 443L267 479" fill="none" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M317 479H345" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round"/>
+
+    <rect x="644" y="358" width="164" height="142" rx="40" fill="#8B5CF6"/>
+    <circle cx="726" cy="429" r="46" fill="none" stroke="#FFFFFF" stroke-width="15"/>
+    <path d="M680 429H772M726 383C744 400 752 415 752 429C752 443 744 458 726 475M726 383C708 400 700 415 700 429C700 443 708 458 726 475" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round"/>
+
+    <rect x="216" y="582" width="164" height="142" rx="40" fill="#F59E0B"/>
+    <path d="M266 646H330" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round"/>
+    <path d="M298 614V678" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round"/>
+
+    <rect x="644" y="582" width="164" height="142" rx="40" fill="#EC4899"/>
+    <path d="M697 621L758 653L697 685V621Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="12" stroke-linejoin="round"/>
+
+    <g filter="url(#glow)">
+      <path d="M531 326L411 533H501L466 704L622 467H526L578 326H531Z" fill="url(#bolt)" stroke="#FFFFFF" stroke-width="18" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>

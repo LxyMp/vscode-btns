@@ -11,4 +11,5 @@ tsconfig.json
 tsconfig*.json
 tests/**
 yarn.lock
+resources/icon-source.svg
 .eslintrc.json
